@@ -65,18 +65,35 @@ T+3s    Beam breaks, then clears
 T+11s   Door closes behind you
 ```
 
-### Sizing the geofence
+### Sizing the geofence — smaller than you'd think
 
-At residential speed you want the door finished before you arrive:
+The obvious sizing is "big enough that the door finishes before I arrive":
 
 ```
-   30 km/h  =  8.3 m/s   ×  15 s  =  125 m   → use ~250 m for margin
-   40 km/h  = 11.1 m/s   ×  15 s  =  167 m   → use ~300 m
+   30 km/h  =  8.3 m/s   ×  15 s  =  125 m   → ~250 m with margin
+   40 km/h  = 11.1 m/s   ×  15 s  =  167 m   → ~300 m
 ```
 
-Set the radius so the *slowest* part of your approach still clears the travel
-time. Too small and you wait; too large and the door is open longer than it
-needs to be — which in a Swedish winter is also a heating bill.
+**Don't do this.** It optimises a problem you probably don't have.
+
+There's a **parking space in front of this garage**, and that changes the whole
+calculation. Arriving, you pull onto your own spot, put it in reverse, line up —
+and the door opens during that. You are never blocking a neighbour's access
+while you wait, so **the wait costs nothing.**
+
+Going out is the opposite: you're sitting in the car with the engine running,
+and 15 s is genuinely irritating. That's where anticipation earns its keep.
+
+> **Departure needs anticipation. Arrival doesn't.**
+
+So size the arrival geofence *down*, to **~100–150 m** — near enough that you're
+almost home. A 250 m radius means the door stands open and unattended while
+you're a block away, and a phone GPS can be 100–200 m out on its own. A smaller
+radius means less exposure, fewer false opens, and less heat out the door in
+February. You give up seconds you were spending on your own parking spot anyway.
+
+If you don't have an off-street spot — if waiting means blocking traffic — then
+size up and accept the exposure. Know which case you're in.
 
 ### Why not just GPS
 

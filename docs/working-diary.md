@@ -230,3 +230,24 @@ mesh/BLE layers if the data justifies it.
   inline in the doc — verify before building on it.
 - Node names in the template sensor (`BD8-Attic` etc.) are placeholders.
 - All cascade head-start figures remain estimates, not stopwatch measurements.
+
+### Correction: the arrival geofence was over-engineered
+
+User mentioned they have **an off-street parking space in front of the garage**.
+That invalidates the 250 m arrival geofence I specced.
+
+The asymmetry I'd missed: **departure needs anticipation, arrival doesn't.**
+Going out you're sitting in the car with the engine running and 15 s is
+genuinely irritating. Arriving, you pull onto your own spot and line up, and the
+door opens during that — **you are never blocking a neighbour's access, so the
+wait costs nothing.**
+
+I had sized the geofence to eliminate a wait that was already free, and paid for
+it in exposure: a 250 m radius leaves the door open and unattended while you're
+a block away, on a signal that can itself be 100–200 m wrong. Cut the arrival
+radius to **~100–150 m**. Less exposure, fewer false opens, less heat lost in
+February, and the only cost is seconds spent on your own parking spot anyway.
+
+Noted the condition explicitly in the docs: if there's *no* off-street spot and
+waiting means blocking traffic, size up and accept the exposure. The right
+answer depends on which case you're in.

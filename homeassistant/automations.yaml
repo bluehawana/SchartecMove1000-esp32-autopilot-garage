@@ -65,6 +65,12 @@
 #
 # (b) is the load-bearing one. It is what separates "a human arrived" from
 # "a vehicle arrived", and it kills GPS drift as a failure mode.
+#
+# Set zone.home's radius to ~100-150m, NOT the 250m you would need to have the
+# door finished on arrival. There is an off-street parking space in front of
+# this garage, so waiting a few seconds costs nothing - you are on your own spot,
+# not blocking anyone. A smaller radius means the door spends less time open and
+# unattended. Departure needs anticipation; arrival does not.
 # -----------------------------------------------------------------------------
 - alias: "Garage - auto-open for returning household member (by car)"
   id: garage_arrival_car
