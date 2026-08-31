@@ -89,38 +89,77 @@ automation carry on unaware.
 
 | Item | Why | ~SEK |
 |---|---|---|
-| USB SSD 240 GB + USB3 enclosure | **Not an SD card** — see below | 350 |
+| SanDisk **Max Endurance** microSD 256 GB | Endurance line, not Ultra/Extreme | 350 |
 | Official USB-C PSU, 3 A | Undervolting causes bizarre, hard-to-trace faults | 150 |
 | Case with heatsink | The Pi 4 runs warm | 120 |
 | Ethernet cable | More reliable than Wi-Fi | 50 |
 
-### ⚠️ Do not boot from an SD card
+### Storage: a high-endurance card is fine
 
-This is the single most common way a Home Assistant Pi dies. HA writes to its
-database constantly; SD cards typically fail within months to a year. The
-failure mode is that your garage stops recognising you one morning.
+Common advice is "always boot from SSD". That is over-prescribed. What actually
+kills cards is **write volume and the wrong card**, not the SD form factor.
 
-**Boot from a USB SSD.** A cheap 240 GB drive is plenty.
+**Pick the right SanDisk line** — this matters far more than capacity:
+
+| Line | Designed for | For HA |
+|---|---|---|
+| Ultra | Cameras | ❌ Worst |
+| Extreme / Extreme Pro | Fast video | ❌ Fast ≠ durable |
+| **High Endurance** | Dashcams | ✅ Fine |
+| **Max Endurance** | Security cameras, continuous write | ✅✅ Best |
+
+High/Max Endurance are built for exactly our load: writing constantly, forever.
+Extreme optimises sequential speed, which we never use.
+
+**Buy bigger than you need — but for the right reason.** HA uses ~8 GB plus a
+1–3 GB database, so 32 GB would do. A 256 GB card with 12 GB used has 240 GB of
+spare blocks for wear levelling to rotate through, which spreads writes and cuts
+per-block erase counts substantially. Buy big to spread the wear, not to fit.
+
+> Don't pay extra for A2. It helps random IOPS in theory, but the Pi doesn't
+> fully use command queuing, so the real gain is small. Spend that money on
+> endurance instead.
+
+### Cut the writes at the source — this matters more than the card
+
+The firmware already throttles the noisy sensors: the LD2410 reports ~10× per
+second, and publishing that raw would write **~864,000 rows a day** for one
+sensor. Throttled to 1 s it is ~86,000 — a **10× reduction**, for free.
+
+Then exclude what you don't need to keep history for. In `configuration.yaml`:
+
+```yaml
+recorder:
+  purge_keep_days: 7
+  commit_interval: 30        # default is 1s; batching cuts write ops hard
+  exclude:
+    entities:
+      - sensor.garage_moving_distance   # commissioning only
+      - sensor.garage_still_distance
+      - sensor.garage_bay_distance
+      - sensor.garage_wifi_signal
+```
+
+Keep the *binary* sensors and the cover — those are low-rate and are the ones
+you actually want history for. It is the continuous numeric sensors that hurt.
+
+### And back up off the device
+
+With backups landing off the Pi, a dead card costs an hour, not a weekend. And
+the garage keeps working throughout, because the door logic is on the ESP32.
 
 ## Install
 
-### 1. Enable USB boot (only if needed)
-
-Pi 4 units made from roughly mid-2020 support USB boot out of the box. Older
-ones need a bootloader update — Raspberry Pi Imager →
-*Misc utility images → Bootloader → USB Boot* → write to a spare SD card, boot
-once, done.
-
-### 2. Write Home Assistant OS to the SSD
+### 1. Write Home Assistant OS to the card
 
 Use **Home Assistant OS**, not Docker on Raspberry Pi OS. HA OS gives you the
 Supervisor and add-ons, and — importantly for this project — host networking,
 so mDNS discovery and the HomeKit bridge actually work.
 
 Raspberry Pi Imager → *Other specific-purpose OS → Home Assistant →
-Home Assistant OS (RPi 4)* → write to the SSD over USB.
+Home Assistant OS (RPi 4)*.
 
-### 3. First boot
+### 2. First boot
 
 Connect Ethernet and power, then open:
 
@@ -131,14 +170,14 @@ http://homeassistant.local:8123
 Create the account. Set the home zone radius to **100–150 m** — deliberately
 small; see [experience-design.md](experience-design.md) for why.
 
-### 4. Add ESPHome
+### 3. Add ESPHome
 
 *Settings → Add-ons → Add-on Store → **ESPHome Device Builder***.
 
 From then on you can edit and reflash the garage node from the browser instead
 of a laptop, which matters when it is mounted on a garage ceiling.
 
-### 5. Adopt the garage node
+### 4. Adopt the garage node
 
 The ESP32 announces itself over mDNS; HA should offer to add it. If not, add
 the ESPHome integration manually by IP and paste the API key from
@@ -147,7 +186,7 @@ the ESPHome integration manually by IP and paste the API key from
 You should end up with `cover.garage_door` plus the sensors listed in the
 [README](../README.md).
 
-### 6. HomeKit bridge (optional, and nice)
+### 5. HomeKit bridge (optional, and nice)
 
 ```yaml
 # configuration.yaml
@@ -162,18 +201,37 @@ Now Siri, Control Center, Apple Watch. **This is the part that does not work on
 macOS Docker** — it needs mDNS on host networking, which is why the Pi wins
 over the Mac mini for HA.
 
-### 7. Backups to the VPS
+### 6. Remote access and backups
 
-The one job the VPSes are genuinely good for here. HA takes automatic backups;
-get them **off the Pi**, so a dead SSD or a stolen Pi doesn't take the config
-with it.
+Behind Starlink/5G CGNAT there is no public IP, so port forwarding is not an
+option — which rules out the usual bad advice for free.
 
-Simplest reliable setup: put the Pi and a VPS on **Tailscale**, then have the
-VPS pull the backup directory on a schedule. Pull, not push — a compromised Pi
-then can't wipe your backups.
+**Remote access → Cloudflare Tunnel.** Free, needs no inbound port and no fixed
+IP, so it works through CGNAT and survives WAN failover.
 
-Port forwarding isn't an option anyway behind Starlink/5G CGNAT, which is one
-fewer bad idea available to you.
+> ⚠️ **Put Cloudflare Access in front of it** (free up to 50 users). A Tunnel
+> without Access publishes your Home Assistant login page to the internet.
+
+Tailscale is the alternative if you would rather not expose a hostname at all —
+it needs a client on each device, but nothing is reachable from the open web.
+
+**Backups → Cloudflare R2.** 10 GB free and no egress fees, S3-compatible so
+HA's backup add-ons can target it directly. Get backups **off the Pi**, so a
+dead card or a stolen Pi doesn't take the configuration with it.
+
+### What not to use Cloudflare for
+
+**D1 cannot replace HA's recorder**, despite being free and SQLite-flavoured:
+
+- HA's recorder speaks SQLAlchemy — SQLite, MariaDB, PostgreSQL. D1 is an
+  **HTTP API**. There is no driver.
+- D1's free tier allows **100,000 row writes/day**. The throttled LD2410 alone
+  produces ~86,000. One garage would exhaust it.
+- Every write would be an internet round trip over CGNAT — the recorder would
+  fall behind and the UI would stall.
+
+Where D1 *does* fit: **daily aggregates**, one row a day instead of 86,000.
+That is a good match for publishing real energy numbers on villalyft.com.
 
 ## Where the Mac mini fits
 

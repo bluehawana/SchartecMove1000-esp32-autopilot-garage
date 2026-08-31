@@ -165,13 +165,21 @@ binary_sensor:
     on_press:
       - lambda: 'id(speculative_open) = false;'
 
-  # Contact on the INTERNAL house -> garage door. This is the real "I am
-  # leaving" signal, and it is the whole reason the experience feels instant:
-  # it fires ~20s before you actually need the door, which more than covers
-  # the ~15s the Move 1000 needs to travel 2400mm at 160mm/s.
+  # Contact on the HOUSE's exterior door (the tvattstuga door onto the yard).
+  #
+  # There is NO internal door between house and garage - the garage's only
+  # opening is the main door. So you must walk out of the house, round to the
+  # garage, and the door has to be open before you get there. That makes an
+  # exterior house door the last on-property signal we get, and it is already
+  # late: the walk to the garage opening is shorter than the door's 15s travel.
+  #
+  # Which is why the indoor triggers (hall presence, mesh floor change) are
+  # ESSENTIAL here rather than optional - see docs/experience-design.md.
+  # Bluetooth-to-car is useless for departure now: by the time you are in the
+  # car, the door was already open or you could not have got in.
   - platform: gpio
     id: house_door
-    name: "Garage House Door"
+    name: "House Exterior Door"
     device_class: door
     pin:
       number: GPIO13
@@ -228,8 +236,10 @@ binary_sensor:
       filters:
         - delayed_off: 20s
 
-  # "Someone is walking up to the door from inside." The dwell filter is what
-  # stops a cat, a shadow, or someone crossing the garage from opening it.
+  # Someone inside the garage walking toward the door. NOT the morning
+  # departure trigger any more - you cannot be in the garage before it opens.
+  # This covers the case where you shut the door while working inside and then
+  # want to walk out. The dwell filter stops a cat or a shadow opening it.
   - platform: template
     id: approach_zone
     name: "Garage Inner Approach"
@@ -286,23 +296,51 @@ sensor:
     echo_pin: GPIO19
     id: bay_distance
     name: "Garage Bay Distance"
+    # Diagnostic: what you actually want is binary_sensor.garage_car_present,
+    # not the raw centimetres. Enable this only while setting the threshold.
+    entity_category: diagnostic
+    disabled_by_default: true
     update_interval: 5s
     timeout: 5m
     filters:
       - median:
           window_size: 5
           send_every: 3
+      # A parked car does not move. Only publish when the reading actually
+      # changes, instead of writing the same number to the database forever.
+      - delta: 0.10
 
+  # --- Commissioning-only diagnostics ---------------------------------------
+  # These raw numbers exist to tune the approach threshold ONCE. Nobody looks
+  # at a graph of them afterwards, so they have no business in the recorder
+  # database - which is where practically all the write volume would come from.
+  #
+  # disabled_by_default: enable them in the HA UI while tuning, then disable
+  # them again. Disabled entities are not recorded at all. The automations read
+  # the state machine in RAM, never the database, so nothing depends on this.
+  #
+  # Note the lambda in approach_zone keeps working either way: these still
+  # update on-device, they are just not stored.
   - platform: ld2410
     moving_distance:
       id: ld_moving_dist
       name: "Garage Moving Distance"
+      entity_category: diagnostic
+      disabled_by_default: true
+      filters:
+        - throttle: 1s
     still_distance:
       id: ld_still_dist
       name: "Garage Still Distance"
+      entity_category: diagnostic
+      disabled_by_default: true
+      filters:
+        - throttle: 5s
 
   - platform: wifi_signal
     name: "Garage Wi-Fi Signal"
+    entity_category: diagnostic
+    disabled_by_default: true
     update_interval: 120s
 
 # =============================================================================

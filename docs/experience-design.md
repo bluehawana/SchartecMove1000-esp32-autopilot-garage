@@ -22,40 +22,57 @@ in the boot.
 That one rule generates the entire design. Every trigger below is chosen for
 *how early it fires*, not for how accurately it detects intent.
 
+## The house has no internal door to the garage
+
+This constraint shapes everything, so it goes first.
+
+**The garage's only opening is the main door.** There is no house→garage
+internal door. To reach the car you leave the house, walk round outside, and in
+through the garage opening — which means **the door has to be open before you
+get there**, or you cannot get in at all.
+
+Three consequences, all of which killed an earlier design:
+
+| Trigger | Verdict |
+|---|---|
+| Internal house→garage door contact | ❌ **No such door exists** |
+| Phone pairing to the car's Bluetooth | ❌ **Too late** — if you're in the car, it was already open |
+| mmWave inside the garage | ❌ You can't be inside before it opens |
+
+> **Every useful departure trigger has to come from inside the house.**
+
+The indoor sensors are therefore not a refinement, they are the mechanism. What
+was "layer 1 and 2, nice to have" is now the whole thing.
+
 ## Drive out — morning
 
-The house→garage door is the signal. Not the garage door, not the car.
-
 ```
-T+0s    House→garage door opens          ← TRIGGER, speculative open
+T+0s    Hall presence, heading for the door       ← TRIGGER (indoor)
 T+2s    Door starts moving
-T+8s    You're at the car, loading
-T+15s   Door fully open ........................ nobody was waiting on it
-T+20s   You're in, engine on
-T+25s   You drive out .......................... zero wait
-T+27s   Beam breaks, then clears
-T+35s   Garage is already empty — you left in the car — so it closes
+T+12s   You're out of the house, walking round
+T+17s   Door fully open
+T+20s   You reach the garage opening ......... it was open before you arrived
+T+35s   In the car, engine on
+T+45s   You drive out
+T+48s   Beam breaks, then clears
+T+56s   Garage is empty — you left in the car — so it closes
 ```
 
-**You never see a closed door and you never press anything.**
+The exterior house door contact is a **backup** trigger, not the primary one:
+it fires as you step outside, and the walk from there to the garage opening is
+shorter than the door's 15 s travel. It is better than nothing and it is very
+cheap, but on its own you would stand and wait.
 
-Note *why* it closes at T+35 here but not until T+75 when arriving: the same
-rule, different facts. Going out, the garage empties the moment you do.
+### Measure your own walk
 
-### The screwdriver problem
+Every number above depends on your house. Time these three with a stopwatch
+before setting anything:
 
-You'll also open that house door to grab a screwdriver, and now the garage is
-standing open to the street.
+1. Hall sensor → out of the house
+2. House door → standing at the garage opening
+3. Garage opening → engine running
 
-Solved by distinguishing *why* the door opened:
-
-| Open reason | If nobody drives out | Why |
-|---|---|---|
-| **Speculative** (house door) | **Closes again after 90 s** | We guessed. We were wrong. Undo it |
-| **Commanded** (remote / app / HA) | **Stays open** | A person asked. Don't second-guess them |
-
-That's the `speculative_open` global in the firmware. It's what makes a
-15-second head start affordable — being wrong is cheap, because it self-corrects.
+If (1)+(2) is under 15 s, you need the earlier mesh/floor trigger as well.
 
 ## Drive in — arriving home
 

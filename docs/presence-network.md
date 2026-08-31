@@ -133,12 +133,14 @@ BLE is the thing that actually works to a couple of seconds.
 
 ## Recommended build order
 
-1. **Start with layer 3** (house→garage door contact). Cheapest, highest
-   confidence, and on its own it already gets you to roughly zero wait.
-2. **Add layer 4** (Bluetooth to the Toyota) — free, no hardware.
-3. **Live with it for a week.** Measure whether you're actually ever waiting.
-4. **Only then** add layer 1/2 if the data says you need it.
+1. **Start with layer 2** (hall presence). With no internal door to the garage,
+   an indoor trigger is the mechanism, not an optimisation — see
+   [experience-design.md](experience-design.md).
+2. **Add the exterior door contact** as a cheap backup. It fires late, but it
+   costs almost nothing.
+3. **Time your actual walk** with a stopwatch: hall → out of the house → at the
+   garage opening. If that is under 15 s, you need layer 1 too.
+4. **Only then** add the mesh layer, and expect it to be coarse.
 
-Most likely outcome: layers 3 and 4 are enough and the mesh work is a nice
-optional extra rather than a requirement. Build the cheap certain thing first
-and let real usage tell you whether the clever thing is warranted.
+Bluetooth-to-car is deliberately absent from departures: with no internal door,
+by the time you are in the car the door had to be open already.

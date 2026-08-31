@@ -53,10 +53,10 @@ That rules out the obvious approach. Trigger the door when you *want* to drive
 through and you sit staring at it for fifteen seconds — worse than a remote,
 not better. So every trigger fires **before** the moment of need:
 
-- **Going out:** a cascade — phone **roams to the ground-floor mesh node**
-  (~40–60 s), **hallway** presence (~30 s), the internal **house→garage door**
-  contact (~20 s), and the phone **pairing to the car's Bluetooth** (~15 s,
-  and certain — it can't fire when you're not in the car)
+- **Going out:** every trigger must come from **inside the house** — there is
+  no internal door to the garage, so the door has to be open before you walk
+  round to it. Mesh floor-change (~40–60 s), **hall** presence (~30 s), and the
+  exterior house door (~10 s, late but cheap)
 - **Coming home:** a deliberately *small* **~100–150 m geofence** — with a
   parking space out front, waiting costs nothing, so a tight radius wins
 - **Closing:** a beam that **breaks then clears** — the exact signal that a car

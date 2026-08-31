@@ -410,3 +410,82 @@ and that a later fibre swap changes nothing Pi-side since it is all LAN.
 - **Thermals inside the 弱電箱 are a guess.** Depends on what else is in there
   and whether it vents. Measure `thermal_zone0` after a week before trusting it.
 - Whether dual-WAN failover is actually configured, or the links are manual.
+
+## 2026-08-31 (floor plan) — Two corrections from the actual house
+
+**The garage has no internal door.** The user sent the floor plan and then
+stated it plainly: the garage's only opening is the main door. You leave the
+house, walk round outside, and in through the garage opening.
+
+That invalidated the trigger the whole departure design rested on:
+
+| Trigger | Why it died |
+|---|---|
+| Internal house→garage door contact | **No such door exists** |
+| Bluetooth pairing to the Toyota | **Too late** — in the car means it was already open |
+| mmWave inside the garage | You cannot be inside before it opens |
+
+So **every useful departure trigger must come from inside the house.** What I
+had filed as "layer 1 and 2, nice-to-have margin" is now the entire mechanism.
+Rewrote the cascade around hall presence, with the exterior house door as a
+cheap but late backup, and added a stopwatch step — time the real walk, because
+every number in that section depends on this specific house.
+
+**What survived without changes: the close logic.** Worth noting because it was
+not luck. The rule is "close when the doorway is clear *and* nobody is in the
+garage", with no direction sensing. Under the new route the beam now breaks
+twice on the way out (walk in, then drive out) and twice on the way in — and
+the rule still behaves correctly in all four cases, because it waits on *people
+leaving*, not on beam events. Refusing to build a direction-detecting state
+machine is what made it survive a change to the building.
+
+### Then the better question: why write to the database at all
+
+User asked what the frequent database writes are actually *for*. Correct
+instinct, and the honest answer is: for this project, almost nothing.
+
+The distinction I had not made explicit: **HA's state machine lives in RAM and
+is what every automation reads. The recorder database exists only for history
+graphs and the logbook.** So the test is simply *will anyone ever look at a
+graph of this?*
+
+Applied to our sensors, the answer is no for every high-rate one. The raw
+mmWave distance exists to set a threshold **once**; `bay_distance` in
+centimetres is not what you want, `car_present` is. Meanwhile the genuinely
+useful history — when the door opened, when the car came home — is naturally
+tiny: a garage opens maybe ten times a day.
+
+So throttling was treating the symptom. Changed the diagnostics to
+`disabled_by_default: true` with `entity_category: diagnostic`: enable in the
+UI while tuning, disable afterwards, and they are **not recorded at all**. The
+`approach_zone` lambda is unaffected because it reads on-device state, never the
+database.
+
+**Withdrew the SSD recommendation.** "Always boot from SSD" was over-prescribed.
+With the write volume removed at source, a SanDisk **Max Endurance** card is
+fine — and bigger helps for a non-obvious reason: 256 GB with 12 GB used gives
+wear levelling far more spare blocks to rotate through. Buy big to spread the
+wear, not to fit.
+
+### Cloudflare: right instinct, wrong component
+
+User asked why we weren't using Cloudflare's free D1. Checked it properly: D1
+**cannot** back HA's recorder — the recorder speaks SQLAlchemy (SQLite/MariaDB/
+PostgreSQL) and D1 is an HTTP API with no driver, its free tier allows 100k row
+writes/day which one throttled LD2410 would exhaust, and every write would be an
+internet round trip over CGNAT.
+
+But the instinct was right, and three Cloudflare pieces do fit: **Tunnel** for
+remote access through CGNAT (with **Access** in front, or it publishes the HA
+login to the internet), **R2** for off-device backups, and **D1 for daily
+aggregates** — one row a day, which suits publishing real numbers on
+villalyft.com.
+
+### Still not verified
+
+- The floor plan suggests a door between the stair landing and the laundry
+  room; whether that is one threshold or two is **unconfirmed** and decides
+  where the exterior door contact goes.
+- Garage dimensions (~3.1 × 6.1 m) are **scaled off the drawing**, not measured.
+- The walk time from hall to garage opening is the number the whole cascade
+  depends on and **has not been timed**.

@@ -77,7 +77,7 @@ ESP32
  ├── 2× reed switch ─── open / closed limits  (the opener never tells us)
  ├── IR beam ────────── doorway passage       (the "you're clear" signal)
  ├── LD2410 mmWave ──── who's in the bay      (the "don't close" signal)
- └── door contact ───── house→garage door     (the 15-second head start)
+ └── hall sensor ────── indoor, before you leave  (the head start)
 ```
 
 All the logic lives **on the ESP32**, not in Home Assistant — the door keeps
