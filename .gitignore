@@ -1,0 +1,14 @@
+# Never commit real credentials - this repo is public
+esphome/secrets.yaml
+secrets.yaml
+
+# ESPHome build output
+.esphome/
+esphome/.esphome/
+*.bin
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

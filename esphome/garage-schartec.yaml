@@ -1,0 +1,284 @@
+# =============================================================================
+#  Schartec Move 1000 (Series 3) - Autopilot Garage
+# =============================================================================
+#  Drives the opener's O/S/C dry-contact terminal (Fig. 17 in the Series 3
+#  manual) and adds the things the opener does not have: door position
+#  feedback, presence-triggered opening, and close-after-passage.
+#
+#  All decision logic lives ON THE ESP32 on purpose. The door still behaves
+#  correctly when Home Assistant or Wi-Fi is down.
+#
+#  Board: ESP32-WROOM (NOT WROVER - GPIO16/17 are used by PSRAM on WROVER)
+#  See docs/hardware.md for the pinout and wiring.
+# =============================================================================
+
+substitutions:
+  device_name: garage-schartec
+  # How long the relay holds the O/S/C contact closed. The opener treats this
+  # as a button press; 300-500ms is the sweet spot.
+  pulse_length: 400ms
+  # Gap after the doorway beam clears before the door is allowed to close.
+  # Raise this if a long car's tail is still under the door when it starts.
+  clear_dwell: 8s
+  # If nobody passes through within this window, give up and leave it open.
+  passage_timeout: 5min
+  # Blocks auto-open from re-firing immediately after an auto-close.
+  cycle_cooldown_ms: '60000'
+
+esphome:
+  name: ${device_name}
+  on_boot:
+    priority: 900
+    then:
+      # Never come out of a reboot with the door contact held closed.
+      - switch.turn_off: osc_relay
+      - switch.turn_off: buzzer
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${device_name} fallback"
+    password: !secret fallback_password
+
+captive_portal:
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# --- LD2410 mmWave presence sensor (mounted inside, facing the door) --------
+uart:
+  id: uart_ld2410
+  tx_pin: GPIO16
+  rx_pin: GPIO17
+  baud_rate: 256000
+  parity: NONE
+  stop_bits: 1
+
+ld2410:
+  uart_id: uart_ld2410
+
+globals:
+  # millis() timestamp of the last O/S/C pulse, used for the cooldown.
+  - id: last_cycle_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+# =============================================================================
+#  Outputs
+# =============================================================================
+switch:
+  # Dry contact across the two O/S/C terminals. Potential-free - never feed
+  # voltage into this input.
+  - platform: gpio
+    id: osc_relay
+    pin: GPIO26
+    restore_mode: ALWAYS_OFF
+    internal: true
+
+  # Local piezo. Sounds BEFORE an unattended close starts moving the door.
+  # The opener drives its own 24V hazard light during travel (Fig. 19).
+  - platform: gpio
+    id: buzzer
+    pin: GPIO27
+    restore_mode: ALWAYS_OFF
+    internal: true
+
+  # Kill switch for presence-triggered opening. Turn this off when you are
+  # working in the garage, or the door opens every time you walk past.
+  - platform: template
+    id: auto_open_enabled
+    name: "Garage Auto-Open"
+    icon: mdi:motion-sensor
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+  # Kill switch for close-after-passage.
+  - platform: template
+    id: auto_close_enabled
+    name: "Garage Auto-Close"
+    icon: mdi:garage-alert
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+# =============================================================================
+#  Inputs
+# =============================================================================
+binary_sensor:
+  # Reed at the fully-closed limit.
+  - platform: gpio
+    id: door_closed
+    name: "Garage Closed Limit"
+    device_class: garage_door
+    pin:
+      number: GPIO32
+      mode: { input: true, pullup: true }
+      inverted: true
+    filters: [delayed_on_off: 100ms]
+
+  # Reed at the fully-open limit. Reaching it arms the auto-close watcher.
+  - platform: gpio
+    id: door_open
+    name: "Garage Open Limit"
+    pin:
+      number: GPIO33
+      mode: { input: true, pullup: true }
+      inverted: true
+    filters: [delayed_on_off: 100ms]
+    on_press:
+      - if:
+          condition:
+            switch.is_on: auto_close_enabled
+          then:
+            - script.execute: auto_close_watch
+
+  # SECOND, INDEPENDENT beam across the doorway - NOT the opener's safety
+  # photocell. The Schartec photocell stays wired only to the opener's own
+  # safety loop so nothing we do here can compromise it. See docs/safety.md.
+  - platform: gpio
+    id: beam_blocked
+    name: "Garage Doorway Beam Blocked"
+    device_class: occupancy
+    pin:
+      number: GPIO25
+      mode: { input: true, pullup: true }
+      inverted: true
+    filters: [delayed_on_off: 50ms]
+
+  - platform: ld2410
+    has_target:
+      id: ld_has_target
+      name: "Garage Occupancy"
+
+  # "Someone is walking up to the door from inside." The dwell filter is what
+  # stops a cat, a shadow, or someone crossing the garage from opening it.
+  - platform: template
+    id: approach_zone
+    name: "Garage Inner Approach"
+    device_class: motion
+    lambda: |-
+      return id(ld_moving_dist).has_state()
+          && id(ld_moving_dist).state > 0
+          && id(ld_moving_dist).state < 200;   // cm from the sensor
+    filters:
+      - delayed_on: 1500ms
+      - delayed_off: 3s
+    on_press:
+      - if:
+          condition:
+            and:
+              - switch.is_on: auto_open_enabled
+              - binary_sensor.is_on: door_closed
+              - lambda: 'return (millis() - id(last_cycle_ms)) > ${cycle_cooldown_ms};'
+          then:
+            - logger.log: "Inner approach - opening"
+            - script.execute: pulse_osc
+
+sensor:
+  - platform: ld2410
+    moving_distance:
+      id: ld_moving_dist
+      name: "Garage Moving Distance"
+    still_distance:
+      id: ld_still_dist
+      name: "Garage Still Distance"
+
+  - platform: wifi_signal
+    name: "Garage Wi-Fi Signal"
+    update_interval: 120s
+
+# =============================================================================
+#  Logic
+# =============================================================================
+script:
+  # The only thing that ever touches the relay.
+  - id: pulse_osc
+    mode: single
+    then:
+      - switch.turn_on: osc_relay
+      - delay: ${pulse_length}
+      - switch.turn_off: osc_relay
+      - lambda: 'id(last_cycle_ms) = millis();'
+
+  # Close-after-passage. Armed when the door reaches its open limit.
+  #
+  #   open -> wait for the beam to break (something is passing through)
+  #        -> wait for it to clear
+  #        -> dwell, then re-confirm everything
+  #        -> pre-warn, then pulse to close
+  #
+  # If nothing ever passes through, the door is LEFT OPEN. Never blind-close.
+  - id: auto_close_watch
+    mode: restart
+    then:
+      - logger.log: "Door open - watching for passage"
+      - wait_until:
+          condition:
+            binary_sensor.is_on: beam_blocked
+          timeout: ${passage_timeout}
+      - if:
+          condition:
+            binary_sensor.is_on: beam_blocked
+          then:
+            - logger.log: "Passage detected - waiting for doorway to clear"
+            - wait_until:
+                condition:
+                  binary_sensor.is_off: beam_blocked
+            - delay: ${clear_dwell}
+            # Re-confirm from scratch. State may have changed during the dwell.
+            - if:
+                condition:
+                  and:
+                    - binary_sensor.is_off: beam_blocked
+                    - binary_sensor.is_on: door_open
+                    - binary_sensor.is_off: approach_zone
+                    - binary_sensor.is_off: ld_has_target
+                    - switch.is_on: auto_close_enabled
+                then:
+                  - logger.log: "Doorway clear - closing"
+                  - switch.turn_on: buzzer
+                  - delay: 3s
+                  - switch.turn_off: buzzer
+                  - script.execute: pulse_osc
+                else:
+                  - logger.log: "Re-check failed - leaving door open"
+          else:
+            - logger.log: "No passage within timeout - leaving door open"
+
+# =============================================================================
+#  Cover entity for Home Assistant
+# =============================================================================
+cover:
+  - platform: template
+    name: "Garage Door"
+    id: garage_door
+    device_class: garage
+    lambda: |-
+      if (id(door_closed).state) return COVER_CLOSED;
+      return COVER_OPEN;
+    open_action:
+      - if:
+          condition:
+            binary_sensor.is_on: door_closed
+          then:
+            - script.execute: pulse_osc
+    close_action:
+      - if:
+          condition:
+            binary_sensor.is_on: door_open
+          then:
+            - script.execute: pulse_osc
+    stop_action:
+      - script.execute: pulse_osc

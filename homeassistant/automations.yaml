@@ -1,0 +1,194 @@
+# =============================================================================
+#  Home Assistant automations - Schartec Move 1000 Autopilot
+# =============================================================================
+#  The ESP32 handles going OUT (presence -> open, passage -> close) entirely on
+#  its own. These automations handle coming HOME, plus the safety nets.
+#
+#  Replace device_tracker.phone / notify.mobile_app_phone with your entities.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. ARRIVAL - the default, and the one I'd actually run.
+#
+# A pure GPS trigger is a bad idea on its own: phone geofences drift by
+# 100-200m, so the door can swing open while you are still down the road and
+# can't see it. One tap costs you nothing and removes the whole failure class.
+# -----------------------------------------------------------------------------
+- alias: "Garage - offer to open on arrival"
+  id: garage_arrival_notify
+  mode: single
+  triggers:
+    - trigger: zone
+      entity_id: device_tracker.phone
+      zone: zone.home
+      event: enter
+  conditions:
+    - condition: state
+      entity_id: cover.garage_door
+      state: "closed"
+  actions:
+    - action: notify.mobile_app_phone
+      data:
+        title: "Home"
+        message: "Open the garage?"
+        data:
+          actions:
+            - action: "GARAGE_OPEN"
+              title: "Open"
+          # Stays put on the lock screen until you deal with it.
+          push:
+            interruption-level: time-sensitive
+
+- alias: "Garage - handle open notification tap"
+  id: garage_arrival_action
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: "GARAGE_OPEN"
+  actions:
+    - action: cover.open_cover
+      target:
+        entity_id: cover.garage_door
+
+# -----------------------------------------------------------------------------
+# 2. ARRIVAL - fully automatic (opt-in).
+#
+# Only enable this once you trust the setup. Two independent signals must
+# agree, which is what makes it tolerable:
+#   a) phone crossed the home geofence, AND
+#   b) phone is connected to the car stereo over Bluetooth
+#
+# (b) is the important one - it proves you are IN THE CAR rather than the phone
+# drifting while it sits on the kitchen table. Swap in a BLE beacon or an
+# ESPresense room sensor on the driveway if you don't have car Bluetooth.
+# -----------------------------------------------------------------------------
+- alias: "Garage - auto-open on arrival by car"
+  id: garage_arrival_auto
+  mode: single
+  # Disabled by default on purpose. Turn it on in the UI when ready.
+  initial_state: false
+  triggers:
+    - trigger: zone
+      entity_id: device_tracker.phone
+      zone: zone.home
+      event: enter
+  conditions:
+    - condition: state
+      entity_id: cover.garage_door
+      state: "closed"
+    # Proves you are in the car, not just near the house.
+    - condition: state
+      entity_id: sensor.phone_bluetooth_connection
+      state: "MyCarStereo"
+    # Don't re-fire if we already opened in the last few minutes.
+    - condition: template
+      value_template: >
+        {{ as_timestamp(now())
+           - as_timestamp(states.cover.garage_door.last_changed) > 300 }}
+  actions:
+    - action: cover.open_cover
+      target:
+        entity_id: cover.garage_door
+
+# -----------------------------------------------------------------------------
+# 3. SAFETY NET - door left open.
+#
+# The ESP32 deliberately leaves the door open if nobody passed through the
+# beam. That is the correct behaviour, but you still want to be told.
+# -----------------------------------------------------------------------------
+- alias: "Garage - warn if left open"
+  id: garage_left_open
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: cover.garage_door
+      to: "open"
+      for: "00:10:00"
+  actions:
+    - action: notify.mobile_app_phone
+      data:
+        title: "Garage still open"
+        message: "Open for 10 minutes. Close it?"
+        data:
+          actions:
+            - action: "GARAGE_CLOSE"
+              title: "Close"
+    - repeat:
+        # Nag every 10 min while it stays open, up to an hour.
+        count: 5
+        sequence:
+          - delay: "00:10:00"
+          - condition: state
+            entity_id: cover.garage_door
+            state: "open"
+          - action: notify.mobile_app_phone
+            data:
+              message: "Garage is STILL open."
+
+- alias: "Garage - handle close notification tap"
+  id: garage_close_action
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: "GARAGE_CLOSE"
+  actions:
+    - action: cover.close_cover
+      target:
+        entity_id: cover.garage_door
+
+# -----------------------------------------------------------------------------
+# 4. NIGHT GUARD - disable presence-triggered opening overnight.
+#
+# The inner approach sensor is safe (you're already inside), but there is no
+# reason for it to be live at 03:00.
+# -----------------------------------------------------------------------------
+- alias: "Garage - auto-open off at night"
+  id: garage_autoopen_night_off
+  triggers:
+    - trigger: time
+      at: "23:00:00"
+  actions:
+    - action: switch.turn_off
+      target:
+        entity_id: switch.garage_auto_open
+
+- alias: "Garage - auto-open on in the morning"
+  id: garage_autoopen_morning_on
+  triggers:
+    - trigger: time
+      at: "06:00:00"
+  actions:
+    - action: switch.turn_on
+      target:
+        entity_id: switch.garage_auto_open
+
+# -----------------------------------------------------------------------------
+# 5. AWAY GUARD - never let the door sit open when nobody is home.
+# -----------------------------------------------------------------------------
+- alias: "Garage - close when everyone leaves"
+  id: garage_close_on_away
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: group.family
+      to: "not_home"
+      for: "00:05:00"
+  conditions:
+    - condition: state
+      entity_id: cover.garage_door
+      state: "open"
+    # Never move the door if the beam says something is in the doorway.
+    - condition: state
+      entity_id: binary_sensor.garage_doorway_beam_blocked
+      state: "off"
+  actions:
+    - action: notify.mobile_app_phone
+      data:
+        message: "Everyone left - closing the garage."
+    - action: cover.close_cover
+      target:
+        entity_id: cover.garage_door
