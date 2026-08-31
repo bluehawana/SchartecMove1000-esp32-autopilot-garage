@@ -92,7 +92,7 @@ Watch what that does in each case, with no direction sensing at all:
 |---|---|---|
 | Doorway clear? | Yes, after the dwell | Yes, after the dwell |
 | Person in the garage? | **No** — they left with the vehicle | **Yes** — climbing out of the car |
-| Result | Closes after ~8 s | **Waits** until they walk inside |
+| Result | Closes after the ~8 s dwell | **Waits** until they walk inside |
 
 Same code path. No second beam, no direction logic, no state machine that can
 get its two cases the wrong way round. And it is the *safe* rule as well as the
@@ -194,7 +194,7 @@ Every number here is a starting point. Measure and adjust:
 | `empty_settle` (10 s) | firmware subs | Raise if it ever closes while you're still inside |
 | `cycle_cooldown_ms` (60 s) | firmware subs | Raise if it reopens on you |
 | Approach threshold (200 cm) | `approach_zone` lambda | Sensor to where you park |
-| Geofence radius (~250 m) | HA zone | Approach speed × 15 s, plus margin |
+| Geofence radius (~100–150 m) | HA zone | Keep it small if you have off-street parking |
 
 Time your own door with a stopwatch on first commissioning. If it's not
 2400 mm, every timing above shifts.

@@ -17,3 +17,6 @@ esphome/.esphome/
 .env
 .env.*
 !.env.example
+
+# Python venv
+.venv/

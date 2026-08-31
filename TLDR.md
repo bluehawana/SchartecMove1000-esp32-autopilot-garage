@@ -53,8 +53,9 @@ this project falls out of that constraint:
 - Going out, the trigger is the **internal house→garage door**, not the garage
   door. It fires ~20s before you're ready to move. By the time you're in the
   car, the door has been open for five seconds.
-- Coming home, the trigger is a **geofence ~250 m out** — about 30 seconds at
-  residential speed. Enough to arrive at an open door without slowing down.
+- Coming home, the trigger is a **geofence ~100–150 m out**, kept deliberately
+  small: there's a parking space in front of the garage, so a few seconds' wait
+  costs nothing and a tighter radius leaves the door open far less.
 - Closing is triggered by a **beam that breaks and then clears**, which is the
   precise signal that a car or bike has physically passed through. Works
   identically for both. A fixed timer never could.

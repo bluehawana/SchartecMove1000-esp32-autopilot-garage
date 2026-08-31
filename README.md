@@ -57,7 +57,8 @@ not better. So every trigger fires **before** the moment of need:
   (~40–60 s), **hallway** presence (~30 s), the internal **house→garage door**
   contact (~20 s), and the phone **pairing to the car's Bluetooth** (~15 s,
   and certain — it can't fire when you're not in the car)
-- **Coming home:** a **~250 m geofence**, ~30 s out at residential speed
+- **Coming home:** a deliberately *small* **~100–150 m geofence** — with a
+  parking space out front, waiting costs nothing, so a tight radius wins
 - **Closing:** a beam that **breaks then clears** — the exact signal that a car
   or bike has passed through, and it works the same for both
 
@@ -97,7 +98,14 @@ docs/
   working-diary.md         session log
 ```
 
-## Quick start
+## Validate before you buy anything
+
+The cheapest place to find mistakes is before the parcels arrive. This needs no
+hardware at all:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install esphome
+```
 
 ```bash
 cp esphome/secrets.yaml.example esphome/secrets.yaml
@@ -109,10 +117,20 @@ Fill it in — generate the API key with:
 openssl rand -base64 32
 ```
 
-Then flash:
+Then check the firmware:
 
 ```bash
-esphome run esphome/garage-schartec.yaml
+.venv/bin/esphome config esphome/garage-schartec.yaml
+```
+
+> ✅ Validated against **ESPHome 2026.8.2** — `Configuration is valid!`, no
+> warnings, no strapping-pin complaints. Re-run it after any edit; it catches
+> schema mistakes in seconds.
+
+## Flashing
+
+```bash
+.venv/bin/esphome run esphome/garage-schartec.yaml
 ```
 
 Wire it up per [docs/hardware.md](docs/hardware.md), then copy

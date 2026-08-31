@@ -14,9 +14,11 @@ The workhorse. Install it on both phones and it provides:
 - **Home screen + lock screen widgets**, and an Apple Watch complication
 - **Siri** — "Hey Siri, open the garage"
 
-Set your home zone radius to **~250 m**, not the default. See
-[experience-design.md](experience-design.md) for the arithmetic — it needs to
-cover the door's 15 s travel at your approach speed.
+Set your home zone radius to **~100–150 m**. Deliberately smaller than the
+~250 m you'd need to have the door finished on arrival — with a parking space
+out front you can wait a few seconds for free, and a tighter radius means the
+door spends far less time open and unattended. See
+[experience-design.md](experience-design.md).
 
 ## 2. Apple Home (HomeKit bridge)
 

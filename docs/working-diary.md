@@ -298,3 +298,34 @@ Design complete and internally consistent. Still true: **no hardware exists,
 unverified items in the entries above — the ultrasonic threshold, the BLE MAC
 placeholder, AiMesh node attribution, iOS activity entity names, and reed
 positions all need real measurement.
+
+## 2026-08-31 (close-out) — Firmware validated, docs swept
+
+**`esphome config` finally ran, and it passes.** Installed ESPHome 2026.8.2 into
+a local venv and validated `garage-schartec.yaml`: **`Configuration is valid!`**,
+no warnings, no strapping-pin complaints. That was the single biggest unverified
+item across the whole project and it is now closed. Added the exact commands to
+the README under "Validate before you buy anything", because the cheapest place
+to find mistakes is before the parcels arrive.
+
+A compile (which would additionally type-check the C++ lambdas) was started;
+that is a deeper check than `config` and the remaining known gap on the firmware.
+
+**Consistency sweep found four stale claims** the geofence correction had missed.
+README, TLDR and ios-setup.md all still told the reader to set a **250 m** home
+zone, contradicting the decision to shrink it to 100–150 m. Fixed all four.
+Worth noting as a pattern: changing a design decision means grepping for the old
+number, not just editing the doc where the reasoning lives.
+
+### What is still unverified
+
+Shorter than it was, and now accurate:
+
+- **No hardware exists.** Nothing bought, wired or flashed.
+- **Ultrasonic bay threshold (2.0 m)** — placeholder, must be measured.
+- **HC-SR04 echo is 5 V** — needs a divider or a 3.3 V-safe module.
+- **`esp32_ble_tracker` RAM headroom** alongside Wi-Fi and UART — untested.
+- **BLE MAC is a placeholder** (`AA:BB:CC:DD:EE:FF`).
+- **AiMesh per-client node attribution** — firmware-dependent, unchecked.
+- **iOS activity entity names** (`Cycling` vs `on_bicycle`) — unchecked.
+- **All timings are estimates**, not stopwatch measurements.
