@@ -7,14 +7,19 @@ you're clear — without touching a remote.
 The goal is simple: **remove the friction so the garage actually gets used.**
 
 ```
-morning, leaving:
-  presence detected inside, within 2 m, dwelling > 1.5 s
-    → pulse O/S/C ......................... door opens, holds
-    → doorway beam breaks ................. car or bike passing through
-    → beam clears
-    → wait 8 s, re-confirm clear + bay empty
-    → pre-warn 3 s, pulse O/S/C ........... door closes
+leaving:                              arriving:
+  you head for the garage               you turn in, door already open
+    → door opens, holds                   → you drive in
+    → beam breaks, then clears            → beam breaks, then clears
+    → garage is empty (you left)          → you are STILL IN THE GARAGE
+    → closes                              → door waits...
+                                          → you walk into the house
+                                          → closes
 ```
+
+One rule produces both: **close when the doorway is clear and no person is in
+the garage.** No direction detection, no second beam — and it is the safe rule
+as well as the convenient one.
 
 All of that logic runs **on the ESP32**, not in Home Assistant. The door keeps
 working when Wi-Fi or HA is down.
@@ -154,6 +159,8 @@ Everything worth adjusting is in `substitutions:` at the top of the YAML:
 | `clear_dwell` | `8s` | A long car's tail is still under the door |
 | `passage_timeout` | `5min` | You linger before pulling out |
 | `speculative_timeout` | `90s` | Your walk-and-load takes longer |
+| `occupancy_timeout` | `10min` | You potter in the garage a lot |
+| `empty_settle` | `10s` | Raise if it ever closes while you're inside |
 | `cycle_cooldown_ms` | `60000` | It reopens as you walk back past |
 
 The 200 cm approach threshold is in the `approach_zone` lambda — set it to

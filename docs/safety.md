@@ -50,7 +50,8 @@ Deliberate choices in `garage-schartec.yaml`:
 |---|---|
 | Nobody passes through within 5 min | **Door left open.** Never blind-closes |
 | Beam blocked at the re-check | Close aborted, door left open |
-| Someone still detected in the bay | Close aborted, door left open |
+| **Person still in the garage** | **Close waits** — indefinitely, up to 10 min |
+| Still occupied after 10 min | Gives up and leaves the door **open**, notifies |
 | Wi-Fi or HA down | Fully functional — logic is on-device |
 | ESP32 reboots | Relay forced off in `on_boot` |
 | Sensor wire cut | Reads as untriggered; door is not moved |
@@ -59,6 +60,28 @@ Deliberate choices in `garage-schartec.yaml`:
 Every failure path leaves the door **open and stationary** rather than moving.
 An open garage is a security problem; a closing garage with someone under it is
 a much worse one.
+
+## The door never closes on an occupied garage
+
+Worth stating on its own, because it is the single most important behaviour
+here and it is what makes automatic closing acceptable at all:
+
+> The door closes only when the doorway is clear **and no person is detected in
+> the garage.**
+
+That one rule is why driving *in* doesn't trap you. You park, the doorway
+clears, and the door **waits** — through you getting out, unloading, and walking
+to the house — before it moves. Driving *out*, the same rule closes it promptly,
+because you left with the vehicle.
+
+The occupancy sensor is deliberately **asymmetric**: instant to report someone
+present, 20 seconds slow to report the garage empty, plus a further 10 s settle.
+Its job is to veto closing, so it is built to be eager to veto and reluctant to
+release. A person standing still is precisely the case mmWave handles worst, so
+the debounce leans hard toward "assume still occupied".
+
+And if the standoff never resolves — someone is working in there — the door
+**stays open** and sends a notification. It never breaks the deadlock by closing.
 
 ## Things that are still your job
 

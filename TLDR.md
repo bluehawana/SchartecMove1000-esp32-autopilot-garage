@@ -36,7 +36,7 @@ twice a day, through a Swedish winter, holding a bike or a coffee or a kid.
 | Wheeling the bike out | Same — no free hand for a remote |
 | Driving out | Door closes behind us, unasked |
 | Coming home | Door is open before we reach the driveway |
-| Driving in | Closes behind us. We never look back |
+| Driving in | Closes **after we've got out and gone inside** — not while we're unloading |
 | Someone's under the door | It stops. Every time. No exceptions |
 
 ## The number that shapes everything
@@ -58,6 +58,9 @@ this project falls out of that constraint:
 - Closing is triggered by a **beam that breaks and then clears**, which is the
   precise signal that a car or bike has physically passed through. Works
   identically for both. A fixed timer never could.
+- And it closes only once **nobody is left in the garage** — so driving out it
+  shuts straight away, while driving in it waits for you to unload and go
+  inside. One rule, both directions, no direction sensing needed.
 
 ## How we get there
 

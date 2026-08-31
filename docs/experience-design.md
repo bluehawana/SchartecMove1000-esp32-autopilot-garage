@@ -34,10 +34,13 @@ T+15s   Door fully open ........................ nobody was waiting on it
 T+20s   You're in, engine on
 T+25s   You drive out .......................... zero wait
 T+27s   Beam breaks, then clears
-T+35s   Door closes behind you
+T+35s   Garage is already empty — you left in the car — so it closes
 ```
 
 **You never see a closed door and you never press anything.**
+
+Note *why* it closes at T+35 here but not until T+75 when arriving: the same
+rule, different facts. Going out, the garage empties the moment you do.
 
 ### The screwdriver problem
 
@@ -57,52 +60,54 @@ That's the `speculative_open` global in the firmware. It's what makes a
 ## Drive in — arriving home
 
 ```
-T-30s   Phone crosses the ~250m geofence + car Bluetooth connected  ← TRIGGER
-T-28s   Door starts moving
-T-15s   Door fully open
-T+0s    You turn in and drive straight through .... never slow down
+T-20s   Geofence + car Bluetooth agree              ← TRIGGER
+T-18s   Door starts moving
+T-3s    Door fully open — you were parking anyway
+T+0s    You drive in
 T+3s    Beam breaks, then clears
-T+11s   Door closes behind you
+T+11s   Doorway clear ......... but you are still in the car
+T+40s   You get out, unload the shopping
+T+55s   You walk into the house
+T+65s   Garage reads empty, settles
+T+75s   Door closes behind you
 ```
 
-### Sizing the geofence — smaller than you'd think
+**The door does not close at T+11s**, and that is the whole point of this
+section. Closing on a cleared doorway is correct when you drove *out* and wrong
+when you drove *in* — because driving in leaves a person in the garage.
 
-The obvious sizing is "big enough that the door finishes before I arrive":
+## The rule that covers both directions
 
-```
-   30 km/h  =  8.3 m/s   ×  15 s  =  125 m   → ~250 m with margin
-   40 km/h  = 11.1 m/s   ×  15 s  =  167 m   → ~300 m
-```
+The naive fix is to detect direction: two beams a hand's width apart, and the
+order they break tells you which way something went. It works, and it's an extra
+sensor and a pile of edge cases.
 
-**Don't do this.** It optimises a problem you probably don't have.
+You don't need it. **One rule covers both:**
 
-There's a **parking space in front of this garage**, and that changes the whole
-calculation. Arriving, you pull onto your own spot, put it in reverse, line up —
-and the door opens during that. You are never blocking a neighbour's access
-while you wait, so **the wait costs nothing.**
+> Close when the doorway is clear **and there is no person in the garage.**
 
-Going out is the opposite: you're sitting in the car with the engine running,
-and 15 s is genuinely irritating. That's where anticipation earns its keep.
+Watch what that does in each case, with no direction sensing at all:
 
-> **Departure needs anticipation. Arrival doesn't.**
+| | Drove out | Drove in |
+|---|---|---|
+| Doorway clear? | Yes, after the dwell | Yes, after the dwell |
+| Person in the garage? | **No** — they left with the vehicle | **Yes** — climbing out of the car |
+| Result | Closes after ~8 s | **Waits** until they walk inside |
 
-So size the arrival geofence *down*, to **~100–150 m** — near enough that you're
-almost home. A 250 m radius means the door stands open and unattended while
-you're a block away, and a phone GPS can be 100–200 m out on its own. A smaller
-radius means less exposure, fewer false opens, and less heat out the door in
-February. You give up seconds you were spending on your own parking spot anyway.
+Same code path. No second beam, no direction logic, no state machine that can
+get its two cases the wrong way round. And it is the *safe* rule as well as the
+convenient one: the door never closes while a person is in the garage, which is
+what you would have had to guarantee anyway.
 
-If you don't have an off-street spot — if waiting means blocking traffic — then
-size up and accept the exposure. Know which case you're in.
+The mmWave sensor's `has_target` gets a deliberately **asymmetric** debounce —
+instant to say "someone is here", 20 seconds slow to say "nobody is". Its job is
+to veto closing, so it should be eager to veto and reluctant to release. After
+the garage first reads empty there's a further 10 s settle, because a person
+standing still is exactly the case mmWave is worst at.
 
-### Why not just GPS
-
-Phone geofences drift 100–200 m. On GPS alone the door will eventually open
-while the phone sits on the kitchen counter and you're nowhere near it.
-
-Requiring **car Bluetooth as well** is what fixes this. It proves you're
-physically in the car. Two independent signals that must agree — that's why
-the automatic arrival automation ships disabled and asks for both.
+If someone is still pottering about after ten minutes, the door gives up and
+**stays open**, and you get a notification. It never resolves that standoff by
+closing.
 
 ## "Is the car back yet?" — the living-room question
 
@@ -185,6 +190,8 @@ Every number here is a starting point. Measure and adjust:
 |---|---|---|
 | `clear_dwell` (8 s) | firmware subs | Longest vehicle, tail to fully clear |
 | `speculative_timeout` (90 s) | firmware subs | Slowest realistic walk-and-load |
+| `occupancy_timeout` (10 min) | firmware subs | How long you potter before it gives up |
+| `empty_settle` (10 s) | firmware subs | Raise if it ever closes while you're still inside |
 | `cycle_cooldown_ms` (60 s) | firmware subs | Raise if it reopens on you |
 | Approach threshold (200 cm) | `approach_zone` lambda | Sensor to where you park |
 | Geofence radius (~250 m) | HA zone | Approach speed × 15 s, plus margin |

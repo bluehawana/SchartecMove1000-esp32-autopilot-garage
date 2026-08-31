@@ -25,6 +25,13 @@ substitutions:
   # Shorter leash for a SPECULATIVE open (triggered by the house door). If the
   # guess was wrong and nobody drives out, we close again rather than leave it.
   speculative_timeout: 90s
+  # After a passage, how long we will wait for the garage to empty of PEOPLE
+  # before giving up and leaving the door open. This is what stops the door
+  # closing on you while you climb out of the car after driving in.
+  occupancy_timeout: 10min
+  # Extra settling time after the garage first reads empty. mmWave can briefly
+  # lose a person who is standing still; this makes "empty" mean empty.
+  empty_settle: 10s
   # Blocks auto-open from re-firing immediately after an auto-close.
   cycle_cooldown_ms: '60000'
 
@@ -213,6 +220,10 @@ binary_sensor:
     has_target:
       id: ld_has_target
       name: "Garage Occupancy"
+      # Long delayed_off on purpose: this sensor's job is to VETO closing, so
+      # it must be slow to say "nobody here" and instant to say "someone is".
+      filters:
+        - delayed_off: 20s
 
   # "Someone is walking up to the door from inside." The dwell filter is what
   # stops a cat, a shadow, or someone crossing the garage from opening it.
@@ -353,7 +364,18 @@ script:
           else:
             - logger.log: "Close aborted - doorway not clear"
 
-  # Something is passing through. Wait for it to finish, dwell, then close.
+  # Something passed through the doorway. Now wait until it is genuinely safe
+  # to close - which means two different things depending on which way it went,
+  # handled by ONE rule so we never have to detect direction:
+  #
+  #   Drove OUT - the person left with the vehicle, so the garage is already
+  #               empty. The occupancy wait passes instantly and we close.
+  #   Drove IN  - the person is still in the garage, getting out of the car,
+  #               unloading shopping. Occupancy holds us off until they have
+  #               walked into the house. THEN we close.
+  #
+  # Same code path, no direction sensing, no second beam. The door simply never
+  # closes while a person is in the garage - which is also the safe rule.
   - id: wait_clear_then_close
     mode: restart
     then:
@@ -362,7 +384,23 @@ script:
           condition:
             binary_sensor.is_off: beam_blocked
       - delay: ${clear_dwell}
-      - script.execute: close_now
+      - logger.log: "Doorway clear - waiting for the garage to empty of people"
+      - wait_until:
+          condition:
+            and:
+              - binary_sensor.is_off: ld_has_target
+              - binary_sensor.is_off: approach_zone
+              - binary_sensor.is_off: beam_blocked
+          timeout: ${occupancy_timeout}
+      # Settle, then re-confirm. close_now checks everything again anyway.
+      - delay: ${empty_settle}
+      - if:
+          condition:
+            binary_sensor.is_off: ld_has_target
+          then:
+            - script.execute: close_now
+          else:
+            - logger.log: "Someone is still in the garage - leaving door open"
 
   # Armed when the door reaches its open limit. Branches on WHY it opened.
   #

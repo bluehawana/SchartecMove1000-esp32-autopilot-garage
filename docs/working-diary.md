@@ -251,3 +251,50 @@ February, and the only cost is seconds spent on your own parking spot anyway.
 Noted the condition explicitly in the docs: if there's *no* off-street spot and
 waiting means blocking traffic, size up and accept the exposure. The right
 answer depends on which case you're in.
+
+## 2026-08-31 (final) — The close rule was wrong for arrivals
+
+**The bug the user caught.** The design closed the door 8 seconds after the
+doorway beam cleared. That is right when you drive *out* and **wrong when you
+drive in** — driving in leaves a person standing in the garage, so the door
+would start closing while they were still climbing out of the car or carrying
+shopping. Not just annoying: it's the exact scenario the whole safety story is
+supposed to prevent.
+
+**Rejected the obvious fix.** Direction detection — two beams a hand's width
+apart, order of breaking tells you which way something went — works, and costs
+an extra sensor plus a state machine with two cases that can be wired up
+backwards.
+
+**The rule that made it disappear:**
+
+> Close when the doorway is clear **and there is no person in the garage.**
+
+No direction sensing at all. Driving out, the garage empties the moment you do,
+so it closes promptly. Driving in, occupancy holds the door until you've
+unloaded and gone inside. **Same code path, both directions**, and it happens to
+be the safe rule as well as the convenient one — the door simply never closes on
+an occupied garage, which had to be guaranteed anyway.
+
+**Made the occupancy sensor deliberately asymmetric.** `has_target` is instant
+to say "someone is here" and carries a 20 s `delayed_off` before it will say
+"nobody is", plus a further 10 s settle. Its job is to *veto* closing, so it
+should be eager to veto and reluctant to release. A person standing still is the
+case mmWave is worst at, so the debounce leans toward assuming occupied.
+
+**Standoffs resolve open, never closed.** Someone still pottering after ten
+minutes → the door gives up and stays **open**, with a notification. It never
+breaks a deadlock by moving.
+
+**Generalised the framing.** The user pointed out this applies to every villa
+owner, not just this house — nobody should have to hurry into their garage
+inside fifteen seconds. Rewrote README, TLDR and experience-design around that,
+and the villalyft.com case page too.
+
+### Repo state at end of session
+
+Design complete and internally consistent. Still true: **no hardware exists,
+`esphome config` has never run**, and every timing is an estimate. Full list of
+unverified items in the entries above — the ultrasonic threshold, the BLE MAC
+placeholder, AiMesh node attribution, iOS activity entity names, and reed
+positions all need real measurement.
