@@ -11,14 +11,23 @@
 | Opto-isolated relay module (1ch) | Dry contact onto O/S/C | ~€3 |
 | HLK-LD2410 (or LD2410C) | mmWave inner-approach sensor | ~€8 |
 | 2× NC reed switch + magnet | Open / closed limits | ~€5 |
-| Door contact (reed) | House→garage door — the early trigger | ~€5 |
+| **Indoor ESP32 node** | Laundry-room door contact — the house and garage are separate structures, so this cannot share the garage node | ~€8 |
+| Door contact (reed) | Laundry room's exterior door | ~€5 |
+| Hall presence sensor (Zigbee/Wi-Fi) | **The primary departure trigger.** Off-the-shelf avoids running cable between rooms | ~€25 |
 | HC-SR04 ultrasonic | Car-present in the bay | ~€3 |
 | BLE beacon tag | Bike identity (under the saddle) | ~€10 |
 | Piezo buzzer 3–5 V | Pre-close warning | ~€2 |
 | 24 V flashing warning light, ≤100 mA | Travel warning, driven by the opener | ~€15 |
 | 5 V USB PSU **or** 24 V→5 V buck | Powers ESP32 + LD2410 | ~€6 |
 
-Roughly **€110 on top of the opener**.
+Roughly **€140 on top of the opener**.
+
+> **Why an indoor node.** There is no internal door between house and garage,
+> and they are separate structures — so the departure triggers all live in the
+> house while the door hardware lives in the garage. A second small ESP32 in the
+> laundry room (right next to the network cabinet, so easy to wire and power)
+> handles the exterior door contact. The hall sensor is easier as an
+> off-the-shelf wireless unit reporting straight to Home Assistant.
 
 **Skip the Move 1000-Speed.** It's ~30% more for 200 mm/s vs 160 mm/s — about
 3 s per door cycle — and it drops the weight limit from 140 kg to 100 kg. With

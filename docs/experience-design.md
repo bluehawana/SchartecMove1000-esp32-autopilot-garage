@@ -46,33 +46,70 @@ was "layer 1 and 2, nice to have" is now the whole thing.
 
 ## Drive out — morning
 
-```
-T+0s    Hall presence, heading for the door       ← TRIGGER (indoor)
-T+2s    Door starts moving
-T+12s   You're out of the house, walking round
-T+17s   Door fully open
-T+20s   You reach the garage opening ......... it was open before you arrived
-T+35s   In the car, engine on
-T+45s   You drive out
-T+48s   Beam breaks, then clears
-T+56s   Garage is empty — you left in the car — so it closes
-```
+The route is `kitchen/living → hall → laundry → exterior door → outside →
+garage main door`. **Two thresholds, neither of them internal to the garage.**
 
-The exterior house door contact is a **backup** trigger, not the primary one:
-it fires as you step outside, and the walk from there to the garage opening is
-shorter than the door's 15 s travel. It is better than nothing and it is very
-cheap, but on its own you would stand and wait.
+The walk from the house door to the garage is only **3–6 seconds**. That is the
+number that makes this hard: the door needs 15.
+
+### Two cases, and only one of them is comfortable
+
+| Case | Head start | You wait |
+|---|---|---|
+| **Last person out** — locking up, checking phone | 15–20 s | **0 s** ✅ |
+| **Not last out** — straight through the door | 3–6 s | **~10 s** ❌ |
+
+So the exterior door contact alone leaves you standing at the garage for ten
+seconds in the common case. That is the exact problem this project exists to
+remove.
+
+### Which is why the trigger has to sit further inside
+
+| Trigger point | Head start | Residual wait |
+|---|---|---|
+| Laundry exterior door contact | 3–6 s | 9–12 s |
+| Presence in the laundry room | 8–11 s | 4–7 s |
+| **Hall presence** ← primary | **10–14 s** | **1–5 s** |
+| Mesh floor change (coming downstairs) | 30 s+ | 0 s |
+
+**The hall is the right primary trigger.** It is the single corridor to the
+exit, so it does not fire all evening the way a living-room sensor would.
+
+### Being honest: a few seconds may remain
+
+Even with the hall sensor, a fast exit can still leave **1–5 seconds** of
+waiting. That is physics — 15 s of travel against a ~11 s walk. Adding the mesh
+layer closes it when you are coming downstairs, but not otherwise.
+
+Worth keeping in proportion, though:
+
+- You are **walking the whole time**, not sitting in a car staring at a closed
+  door. The door is already moving while you approach.
+- The **most common case — last person out, locking up — is zero wait.**
+- And the original problem is solved completely either way: no fumbling for a
+  remote with a bike in your hands.
+
+> Do **not** try to close the gap by walking under a moving door. Wait for it.
+
+### Timeline, hall-triggered
+
+```
+T+0s    Hall presence, heading for the laundry     ← TRIGGER
+T+2s    Door starts moving
+T+6s    Through the laundry, out the exterior door
+T+11s   You reach the garage opening
+T+17s   Door fully open ......... 1-5s of waiting, or none if you locked up
+T+30s   In the car, engine on
+T+40s   You drive out
+T+43s   Beam breaks, then clears
+T+51s   Garage is empty - you left in the car - so it closes
+```
 
 ### Measure your own walk
 
-Every number above depends on your house. Time these three with a stopwatch
-before setting anything:
-
-1. Hall sensor → out of the house
-2. House door → standing at the garage opening
-3. Garage opening → engine running
-
-If (1)+(2) is under 15 s, you need the earlier mesh/floor trigger as well.
+These are the user's estimates, not stopwatch readings. Before setting
+anything, time: **hall sensor → out of the house → standing at the garage
+opening.** Everything above scales from that one number.
 
 ## Drive in — arriving home
 

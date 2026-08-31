@@ -489,3 +489,43 @@ villalyft.com.
 - Garage dimensions (~3.1 × 6.1 m) are **scaled off the drawing**, not measured.
 - The walk time from hall to garage opening is the number the whole cascade
   depends on and **has not been timed**.
+
+## 2026-08-31 (measurements) — The walk is 3-6 seconds, and that is a problem
+
+User confirmed the route: the laundry room has **its own exterior door**, then
+you walk outside to the garage's main door. **Two thresholds, neither internal.**
+And the walk itself is only **3-6 seconds**.
+
+That number is the difficulty. The door needs 15 s, so an exterior door contact
+gives nowhere near enough. It splits into two cases:
+
+- **Last person out** (locking up, checking phone): 15-20 s → zero wait. Fine.
+- **Not last out** (straight through): 3-6 s → **~10 s standing at the garage.**
+
+Ten seconds standing outside is the exact problem this project exists to remove,
+so the trigger had to move further into the house. Hall presence is now the
+primary: ~10-14 s of head start, since it is the single corridor to the exit and
+does not fire all evening the way a living-room sensor would.
+
+**Recorded the honest residual.** Even hall-triggered, a fast exit still leaves
+1-5 s of waiting. That is arithmetic, not a tuning problem: 15 s of travel
+against an ~11 s walk. Wrote it into the doc rather than quietly hoping, along
+with the mitigating context — you are walking throughout rather than sitting in
+a car, and the most common case (locking up) is zero. Also added an explicit
+"do not walk under a moving door" line, because that is the obvious wrong way to
+close the gap.
+
+**Architecture consequence: a second node.** The departure triggers are all
+inside the house while the door hardware is in the garage, and the two are
+separate structures. So a small indoor ESP32 in the laundry room takes the
+exterior door contact — conveniently right beside the network cabinet — and the
+hall sensor is easier as an off-the-shelf wireless unit straight into HA. BOM
+up from ~EUR110 to ~EUR140.
+
+### Still unmeasured
+
+- **Garage dimensions** — user confirmed these are not known and need measuring
+  on site. My ~3.1 x 6.1 m was scaled off the drawing.
+- **The walk time is the user's estimate, not a stopwatch reading.** Every
+  timing in experience-design.md scales from it, so it is the first thing to
+  measure and the most consequential.
