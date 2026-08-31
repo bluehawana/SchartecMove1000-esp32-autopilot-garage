@@ -12,3 +12,8 @@ esphome/.esphome/
 .idea/
 .vscode/
 *.swp
+
+# Env files
+.env
+.env.*
+!.env.example
