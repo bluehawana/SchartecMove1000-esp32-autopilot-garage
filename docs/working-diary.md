@@ -529,3 +529,24 @@ up from ~EUR110 to ~EUR140.
 - **The walk time is the user's estimate, not a stopwatch reading.** Every
   timing in experience-design.md scales from it, so it is the first thing to
   measure and the most consequential.
+
+### Session close — what turns estimates into a design
+
+Added `docs/measurements.md`: a checklist to take to the garage, ordered so that
+nothing gets bought before the one irreversible number is known.
+
+The two that matter most:
+
+1. **Door height** — decides K/M/L rail. Retrofitting a longer rail means
+   dismantling the installation, so it is the most expensive thing to get wrong.
+2. **Hall → garage walk time** — decides how many trigger layers are needed.
+   Over 15 s and the mesh layer can be dropped entirely; under 10 s and it
+   becomes mandatory.
+
+Also included a safety note that does not belong to the automation at all: if
+the door does not stay put when lifted halfway, the springs need professional
+attention **before** any opener is fitted. A garage door spring under tension is
+dangerous, and no amount of correct firmware compensates for an unbalanced door.
+
+Every placeholder in the firmware is cross-referenced to the measurement that
+replaces it, so there is no guessing about which number goes where.

@@ -90,6 +90,7 @@ esphome/
 homeassistant/
   automations.yaml         arrival, safety nets, night guard
 docs/
+  measurements.md          ← what to measure on site, before ordering
   deployment.md            where each box lives — Pi indoors, ESP32 in the garage
   experience-design.md     choreography, timings, what breaks "butter"
   ios-setup.md             Companion app, HomeKit, Shortcuts automations
@@ -98,6 +99,17 @@ docs/
   safety.md                EN 12453, failure modes — read before enabling
   working-diary.md         session log
 ```
+
+## Next step: measure
+
+Every number in this repo is an estimate. Two of them decide real money and a
+real design, and both need a tape measure and a stopwatch:
+
+1. **Door height** → which rail to order. Getting this wrong means dismantling
+   the installation later.
+2. **Hall → garage walk time** → how many trigger layers you actually need.
+
+Checklist to take to the garage: **[docs/measurements.md](docs/measurements.md)**
 
 ## Validate before you buy anything
 
@@ -237,4 +249,9 @@ the Villalyftet model.
 
 ## Status
 
-Design complete, not yet built. Hardware on order.
+**Design complete and validated in software; nothing built, nothing bought.**
+
+- Firmware passes `esphome config` **and** a full compile (ESPHome 2026.8.2)
+- Every physical dimension and timing is still an **estimate** — see
+  [docs/measurements.md](docs/measurements.md)
+- Next action: measure the door height and time the walk
