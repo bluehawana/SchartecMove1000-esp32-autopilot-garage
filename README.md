@@ -90,6 +90,7 @@ esphome/
 homeassistant/
   automations.yaml         arrival, safety nets, night guard
 docs/
+  deployment.md            where each box lives — Pi indoors, ESP32 in the garage
   experience-design.md     choreography, timings, what breaks "butter"
   ios-setup.md             Companion app, HomeKit, Shortcuts automations
   presence-network.md      using the ASUS BD8 mesh for floor-level presence
@@ -198,6 +199,16 @@ Everything worth adjusting is in `substitutions:` at the top of the YAML:
 
 The 200 cm approach threshold is in the `approach_zone` lambda — set it to
 comfortably less than the distance from the sensor to where you park.
+
+## Where things live
+
+The door logic runs **entirely on the ESP32**, which is rated −40 °C … +85 °C
+and belongs in the garage. Home Assistant runs on a **Raspberry Pi indoors** —
+a Pi is only rated to 0 °C and an unheated Swedish garage goes below that.
+
+The upshot worth knowing: **pull the Pi's power and the garage still works.**
+HA only adds arrival triggers and notifications. See
+[docs/deployment.md](docs/deployment.md).
 
 ## Safety
 

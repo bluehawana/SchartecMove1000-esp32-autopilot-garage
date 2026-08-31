@@ -345,3 +345,65 @@ it still **fits**: RAM 56.9%, Flash 70.9%, ~53 KB spare. Being precise about wha
 that proves: the *image* fits. Runtime heap under simultaneous Wi-Fi and BLE is a
 different question and needs real silicon. Noted in the config that this is the
 first section to delete if the node misbehaves.
+
+## 2026-08-31 (deployment) — Where each box lives
+
+User has an always-on Mac mini, two VPSes and a Raspberry Pi 4, and asked where
+Home Assistant should run. Answer: **the Pi, indoors.**
+
+**Ruled out the VPS** — not on performance, on *location*. HA has to be on the
+same LAN as the ESP32: the ESPHome API, the `local_only` iOS webhook (which is
+`local_only` deliberately), BLE presence, and AiMesh node attribution all break
+across the internet. More fundamentally, a garage door should not depend on an
+internet round trip.
+
+**Ruled out the Mac mini** for HA specifically: Docker on macOS has no host
+networking, which breaks mDNS discovery and — the one that matters — the
+**HomeKit bridge**, so no Siri or Control Center. Also it gets rebooted for
+other work. Gave it the camera/Frigate role instead, where its CPU is genuinely
+useful and a reboot costs nothing.
+
+**Temperature is the load-bearing argument** for keeping the Pi out of the
+garage: Pi 4 is rated 0–50 °C and a Swedish garage goes below zero, while the
+ESP32 is −40…+85 °C. It wouldn't fail outright, it would misbehave on the
+coldest week of the year, which is worse.
+
+**Was wrong about the laundry room, and the user's reason settled it.** I had
+argued for the upstairs storage room on humidity grounds. But the laundry room
+is where the *弱电箱* is — the old Telenor entry point, and where Telia fibre
+would terminate if it gets installed. That makes it the network hub, not a
+compromise: wired Ethernet, one place to look when something breaks.
+
+The cabinet also disposes of most of my objection by itself. Wall-mounted and
+enclosed means the Pi is already off the floor, above any flood line, and out of
+the dryer's lint and steam. **The real risk in a 弱电箱 is the opposite of what
+I flagged: heat, not damp** — a closed box with a router, a modem and a Pi 4 all
+running will throttle. Rewrote the section around ventilation, and noted that
+laundry-room fan noise bothers nobody, which is another point in the room's
+favour.
+
+**The SD card warning gets its own callout.** It's the most common way an HA Pi
+dies, and the failure mode here is the garage not recognising you one morning.
+
+**Best verification step in the doc:** pull the Pi's power and confirm the
+garage still opens. That is the test that proves the ESP32 is genuinely
+independent, which is the whole architectural claim.
+
+**CGNAT rules out the usual advice.** The current WAN is Starlink + Tele2 5G,
+and both are behind CGNAT — so there is no reachable public IP and port
+forwarding is not merely inadvisable, it is **impossible**. Any guide saying to
+forward 8123 simply cannot work here. Fortunately the design never wanted it:
+Tailscale for remote access, VPS *pulls* backups over Tailscale, and the iOS
+departure webhook stays `local_only` because it only ever fires from inside the
+garage. Also noted that dual-WAN failover changes the WAN IP on every switch,
+and that a later fibre swap changes nothing Pi-side since it is all LAN.
+
+### Not verified
+
+- Nothing here has been performed — no Pi imaged, no SSD bought, no HA
+  installed. This is a plan.
+- Whether this Pi 4 already has USB-boot firmware (units from ~mid 2020 do;
+  older need an EEPROM update) — unchecked.
+- **Thermals inside the 弱電箱 are a guess.** Depends on what else is in there
+  and whether it vents. Measure `thermal_zone0` after a week before trusting it.
+- Whether dual-WAN failover is actually configured, or the links are manual.
