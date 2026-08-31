@@ -374,13 +374,16 @@ is where the *弱电箱* is — the old Telenor entry point, and where Telia fib
 would terminate if it gets installed. That makes it the network hub, not a
 compromise: wired Ethernet, one place to look when something breaks.
 
-The cabinet also disposes of most of my objection by itself. Wall-mounted and
-enclosed means the Pi is already off the floor, above any flood line, and out of
-the dryer's lint and steam. **The real risk in a 弱电箱 is the opposite of what
-I flagged: heat, not damp** — a closed box with a router, a modem and a Pi 4 all
-running will throttle. Rewrote the section around ventilation, and noted that
-laundry-room fan noise bothers nobody, which is another point in the room's
-favour.
+Then over-corrected: assumed the Pi would go *inside* the cabinet and wrote a
+whole section on cabinet ventilation and thermal throttling. Wrong again — the
+room is a roomy utility space that used to hold a printer and files, so the Pi
+sits on an open shelf with space around it and thermals are a non-issue. Cut
+that section and the fan from the parts list.
+
+What actually survives as advice is one line: put it on a shelf rather than the
+floor, because a washing machine leak is the only real risk left and 40 cm of
+height is free. Twice in one section I invented a constraint the room did not
+have.
 
 **The SD card warning gets its own callout.** It's the most common way an HA Pi
 dies, and the failure mode here is the garage not recognising you one morning.

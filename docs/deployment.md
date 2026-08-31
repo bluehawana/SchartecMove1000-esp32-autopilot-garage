@@ -44,36 +44,21 @@ and closes correctly. The Pi only adds arrival triggers and notifications.
 
 ## Siting the Pi: the laundry room
 
-**This is the right room, and not as a compromise.** It is where the structured
-wiring cabinet (*弱电箱*) already is — the old Telenor broadband entry point,
-and where fibre would terminate if Telia 1000 gets installed later. Temperature
-and fan noise are both non-issues there.
+**The right room, and not as a compromise.** It is where the structured wiring
+cabinet (*弱电箱*) already is — the old Telenor entry point, and where fibre
+would terminate if Telia 1000 gets installed later. It is also a roomy utility
+space that used to hold a printer and files, so there is shelf room to spare and
+nobody cares about fan noise.
 
-Siting the Pi with the network gear means a wired Ethernet drop instead of
-Wi-Fi, and one place to look when something is wrong. Proximity to the garage is
+That gives you the two things that actually matter: **a wired Ethernet drop**,
+and **one place to look** when something is wrong. Proximity to the garage is
 irrelevant either way — the ESP32 reaches HA through the BD8 mesh regardless.
 
-The cabinet also solves most of what would otherwise be laundry-room problems:
-it is wall-mounted and enclosed, so the Pi is off the floor, above any plausible
-flood line, and shielded from dryer lint and steam.
+Open shelf, not inside the cabinet. Nothing to think about thermally.
 
-### The real risk is heat, not damp
-
-A closed *弱电箱* with a router, an ONT or 5G modem and a Pi 4 all running is a
-small warm box, and the Pi 4 throttles when it gets hot. So:
-
-1. **Ventilate the cabinet** — vents top and bottom, or a small low-noise fan.
-   Nobody hears it in a laundry room, which is one of the reasons this room
-   works.
-2. **Don't stack the Pi directly on the router.** Give it air on at least two
-   sides.
-3. **Heatsink case**, and check the temperature after a week:
-   `cat /sys/class/thermal/thermal_zone0/temp` — under 60 °C idle is healthy,
-   sustained 80 °C+ means it is throttling.
-
-Still worth doing, cheaply: keep it toward the **top** of the cabinet (heat
-rises, water doesn't), and not directly above the washing machine if the
-cabinet placement gives you a choice.
+The one habit worth keeping: **put it on a shelf, not on the floor.** The only
+real laundry-room risk left is a washing machine leak, and being 40 cm up costs
+nothing.
 
 ## Networking: Starlink + 5G means no port forwarding
 
@@ -108,7 +93,6 @@ automation carry on unaware.
 | Official USB-C PSU, 3 A | Undervolting causes bizarre, hard-to-trace faults | 150 |
 | Case with heatsink | The Pi 4 runs warm | 120 |
 | Ethernet cable | More reliable than Wi-Fi | 50 |
-| Cabinet vent or 40 mm fan | The *弱电箱* is a small warm box | 100 |
 
 ### ⚠️ Do not boot from an SD card
 
