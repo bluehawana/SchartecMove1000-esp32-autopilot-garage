@@ -324,8 +324,24 @@ Shorter than it was, and now accurate:
 - **No hardware exists.** Nothing bought, wired or flashed.
 - **Ultrasonic bay threshold (2.0 m)** — placeholder, must be measured.
 - **HC-SR04 echo is 5 V** — needs a divider or a 3.3 V-safe module.
-- **`esp32_ble_tracker` RAM headroom** alongside Wi-Fi and UART — untested.
+- ~~`esp32_ble_tracker` RAM headroom~~ — **measured: it fits.** Full compile
+  gives RAM 56.9% (70,916/124,580 B), Flash 70.9% (1,300,347/1,835,008 B), so
+  ~53 KB spare. Caveat: that is *static* allocation. Runtime heap under Wi-Fi/BLE
+  coexistence is still unproven without hardware.
 - **BLE MAC is a placeholder** (`AA:BB:CC:DD:EE:FF`).
 - **AiMesh per-client node attribution** — firmware-dependent, unchecked.
 - **iOS activity entity names** (`Cycling` vs `on_bicycle`) — unchecked.
 - **All timings are estimates**, not stopwatch measurements.
+
+**Compile passes too, not just config.** Ran a full `esphome compile` — exit 0,
+`Successfully compiled program`, no errors. That type-checks every C++ lambda in
+the file, which `config` does not: the cover's `COVER_OPEN` returns, the
+`millis()` cooldown arithmetic, the `optional<bool>` return in the bay-distance
+template. All good.
+
+The build also answered the open BLE question. `esp32_ble_tracker` drags in the
+entire Bluedroid stack — the compile spent ~600 of its 1524 objects on it — and
+it still **fits**: RAM 56.9%, Flash 70.9%, ~53 KB spare. Being precise about what
+that proves: the *image* fits. Runtime heap under simultaneous Wi-Fi and BLE is a
+different question and needs real silicon. Noted in the config that this is the
+first section to delete if the node misbehaves.

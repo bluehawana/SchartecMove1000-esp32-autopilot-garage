@@ -127,6 +127,21 @@ Then check the firmware:
 > warnings, no strapping-pin complaints. Re-run it after any edit; it catches
 > schema mistakes in seconds.
 
+A full compile also passes, which additionally type-checks the C++ lambdas:
+
+```bash
+.venv/bin/esphome compile esphome/garage-schartec.yaml
+```
+
+> ✅ **Compiles clean.** `RAM 56.9%` (70,916 / 124,580 B) ·
+> `Flash 70.9%` (1,300,347 / 1,835,008 B).
+>
+> The RAM figure is the one to watch: enabling `esp32_ble_tracker` pulls in the
+> whole Bluedroid stack alongside Wi-Fi. It **fits**, with ~53 KB spare — but
+> that is static allocation, not runtime heap under Wi-Fi/BLE coexistence. If
+> the node turns out to be unstable on real hardware, dropping the BLE section
+> is the first thing to try; the bike tag is the only feature that needs it.
+
 ## Flashing
 
 ```bash

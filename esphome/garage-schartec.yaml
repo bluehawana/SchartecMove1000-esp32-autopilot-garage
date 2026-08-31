@@ -84,8 +84,11 @@ ld2410:
 # is how we answer "is the bike actually back?" - the bike has no Bluetooth of
 # its own and carries no phone.
 #
-# NOTE: esp32_ble_tracker + Wi-Fi + UART is heavy on RAM. If the device becomes
-# unstable, drop this section and rely on the bay distance sensor alone.
+# NOTE: this pulls in the whole Bluedroid stack alongside Wi-Fi. Measured on
+# ESPHome 2026.8.2: the build fits at RAM 56.9% / Flash 70.9%, leaving ~53 KB
+# spare - but that is static allocation, not runtime heap under Wi-Fi/BLE
+# coexistence. If the node proves unstable on real hardware, delete this
+# section first; the bike tag is the only feature that depends on it.
 esp32_ble_tracker:
   scan_parameters:
     interval: 1100ms
