@@ -22,6 +22,9 @@ substitutions:
   clear_dwell: 8s
   # If nobody passes through within this window, give up and leave it open.
   passage_timeout: 5min
+  # Shorter leash for a SPECULATIVE open (triggered by the house door). If the
+  # guess was wrong and nobody drives out, we close again rather than leave it.
+  speculative_timeout: 90s
   # Blocks auto-open from re-firing immediately after an auto-close.
   cycle_cooldown_ms: '60000'
 
@@ -69,12 +72,34 @@ uart:
 ld2410:
   uart_id: uart_ld2410
 
+# --- BLE beacon tracking -----------------------------------------------------
+# A cheap BLE tag zip-tied under the bike saddle (and one in the car glovebox)
+# is how we answer "is the bike actually back?" - the bike has no Bluetooth of
+# its own and carries no phone.
+#
+# NOTE: esp32_ble_tracker + Wi-Fi + UART is heavy on RAM. If the device becomes
+# unstable, drop this section and rely on the bay distance sensor alone.
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 1100ms
+    window: 500ms
+    active: false
+
 globals:
   # millis() timestamp of the last O/S/C pulse, used for the cooldown.
   - id: last_cycle_ms
     type: uint32_t
     restore_value: no
     initial_value: '0'
+
+  # True when we opened on a GUESS (house door) rather than a command.
+  # A speculative open that goes unused closes itself again; a commanded open
+  # is left alone. This is what lets us start opening 15s early without
+  # leaving the door hanging open every time you fetch a screwdriver.
+  - id: speculative_open
+    type: bool
+    restore_value: no
+    initial_value: 'false'
 
 # =============================================================================
 #  Outputs
@@ -127,6 +152,33 @@ binary_sensor:
       mode: { input: true, pullup: true }
       inverted: true
     filters: [delayed_on_off: 100ms]
+    on_press:
+      - lambda: 'id(speculative_open) = false;'
+
+  # Contact on the INTERNAL house -> garage door. This is the real "I am
+  # leaving" signal, and it is the whole reason the experience feels instant:
+  # it fires ~20s before you actually need the door, which more than covers
+  # the ~15s the Move 1000 needs to travel 2400mm at 160mm/s.
+  - platform: gpio
+    id: house_door
+    name: "Garage House Door"
+    device_class: door
+    pin:
+      number: GPIO13
+      mode: { input: true, pullup: true }
+      inverted: true
+    filters: [delayed_on_off: 200ms]
+    on_press:
+      - if:
+          condition:
+            and:
+              - switch.is_on: auto_open_enabled
+              - binary_sensor.is_on: door_closed
+              - lambda: 'return (millis() - id(last_cycle_ms)) > ${cycle_cooldown_ms};'
+          then:
+            - logger.log: "House door - speculative open"
+            - lambda: 'id(speculative_open) = true;'
+            - script.execute: pulse_osc
 
   # Reed at the fully-open limit. Reaching it arms the auto-close watcher.
   - platform: gpio
@@ -186,7 +238,47 @@ binary_sensor:
             - logger.log: "Inner approach - opening"
             - script.execute: pulse_osc
 
+  # --- Is the vehicle actually back? ---------------------------------------
+  # "Someone is home" and "the car is home" are different facts. A phone in the
+  # living room satisfies a geofence; it does not park a car. These two sensors
+  # are what let us tell the difference.
+
+  - platform: template
+    id: car_in_bay
+    name: "Garage Car Present"
+    device_class: presence
+    lambda: |-
+      if (!id(bay_distance).has_state()) return {};
+      // Empty bay reads the far wall; a parked car reads much closer.
+      return id(bay_distance).state < 2.0;   // metres - MEASURE YOURS
+    filters:
+      - delayed_on: 10s      # ignore someone walking through the beam
+      - delayed_off: 30s     # ignore a brief dropout
+
+  - platform: ble_presence
+    # Beacon under the bike saddle. Replace with your tag's MAC.
+    mac_address: AA:BB:CC:DD:EE:FF
+    id: bike_in_garage
+    name: "Garage Bike Present"
+    device_class: presence
+    filters:
+      - delayed_off: 60s     # BLE advertising is bursty; don't flap
+
 sensor:
+  - platform: ultrasonic
+    # HC-SR04 aimed at the parked car's roof or bonnet.
+    # NOTE: the echo pin is 5V - use a divider, or a 3.3V-safe module.
+    trigger_pin: GPIO18
+    echo_pin: GPIO19
+    id: bay_distance
+    name: "Garage Bay Distance"
+    update_interval: 5s
+    timeout: 5m
+    filters:
+      - median:
+          window_size: 5
+          send_every: 3
+
   - platform: ld2410
     moving_distance:
       id: ld_moving_dist
@@ -202,6 +294,32 @@ sensor:
 # =============================================================================
 #  Logic
 # =============================================================================
+button:
+  # Entry point for triggers that live in ANOTHER ROOM and therefore cannot be
+  # wired to this node - a hallway or living-room presence sensor, a contact on
+  # the car-key hook, a morning routine. Home Assistant presses this.
+  #
+  # It is a *speculative* open on purpose: the earlier we trigger, the more
+  # likely we are wrong, and speculative opens undo themselves after 90s.
+  # That is what makes triggering 30s early affordable.
+  - platform: template
+    name: "Garage Speculative Open"
+    id: btn_speculative_open
+    icon: mdi:garage-open-variant
+    on_press:
+      - if:
+          condition:
+            and:
+              - switch.is_on: auto_open_enabled
+              - binary_sensor.is_on: door_closed
+              - lambda: 'return (millis() - id(last_cycle_ms)) > ${cycle_cooldown_ms};'
+          then:
+            - logger.log: "Remote speculative open"
+            - lambda: 'id(speculative_open) = true;'
+            - script.execute: pulse_osc
+          else:
+            - logger.log: "Speculative open ignored - not closed, or cooling down"
+
 script:
   # The only thing that ever touches the relay.
   - id: pulse_osc
@@ -212,50 +330,83 @@ script:
       - switch.turn_off: osc_relay
       - lambda: 'id(last_cycle_ms) = millis();'
 
-  # Close-after-passage. Armed when the door reaches its open limit.
+  # Shared close path. Nothing closes the door except this script, and it
+  # re-checks every condition from scratch immediately before moving.
+  - id: close_now
+    mode: single
+    then:
+      - if:
+          condition:
+            and:
+              - switch.is_on: auto_close_enabled
+              - binary_sensor.is_on: door_open
+              - binary_sensor.is_off: beam_blocked
+              - binary_sensor.is_off: approach_zone
+              - binary_sensor.is_off: ld_has_target
+          then:
+            - logger.log: "Doorway clear - closing"
+            - switch.turn_on: buzzer          # pre-warn before anything moves
+            - delay: 3s
+            - switch.turn_off: buzzer
+            - lambda: 'id(speculative_open) = false;'
+            - script.execute: pulse_osc
+          else:
+            - logger.log: "Close aborted - doorway not clear"
+
+  # Something is passing through. Wait for it to finish, dwell, then close.
+  - id: wait_clear_then_close
+    mode: restart
+    then:
+      - logger.log: "Passage detected - waiting for doorway to clear"
+      - wait_until:
+          condition:
+            binary_sensor.is_off: beam_blocked
+      - delay: ${clear_dwell}
+      - script.execute: close_now
+
+  # Armed when the door reaches its open limit. Branches on WHY it opened.
   #
-  #   open -> wait for the beam to break (something is passing through)
-  #        -> wait for it to clear
-  #        -> dwell, then re-confirm everything
-  #        -> pre-warn, then pulse to close
+  #   speculative (house door)  -> short leash. If nobody drives out, close
+  #                                again. We guessed; the guess was wrong.
+  #   commanded (remote/app/HA) -> long leash. If nobody drives out, LEAVE IT
+  #                                OPEN. A person asked for this; do not
+  #                                second-guess them by closing the door.
   #
-  # If nothing ever passes through, the door is LEFT OPEN. Never blind-close.
+  # Either way: nothing closes without a confirmed clear doorway.
   - id: auto_close_watch
     mode: restart
     then:
-      - logger.log: "Door open - watching for passage"
-      - wait_until:
-          condition:
-            binary_sensor.is_on: beam_blocked
-          timeout: ${passage_timeout}
       - if:
           condition:
-            binary_sensor.is_on: beam_blocked
+            lambda: 'return id(speculative_open);'
           then:
-            - logger.log: "Passage detected - waiting for doorway to clear"
+            - logger.log: "Speculative open - watching (short leash)"
             - wait_until:
                 condition:
-                  binary_sensor.is_off: beam_blocked
-            - delay: ${clear_dwell}
-            # Re-confirm from scratch. State may have changed during the dwell.
+                  binary_sensor.is_on: beam_blocked
+                timeout: ${speculative_timeout}
             - if:
                 condition:
-                  and:
-                    - binary_sensor.is_off: beam_blocked
-                    - binary_sensor.is_on: door_open
-                    - binary_sensor.is_off: approach_zone
-                    - binary_sensor.is_off: ld_has_target
-                    - switch.is_on: auto_close_enabled
+                  binary_sensor.is_on: beam_blocked
                 then:
-                  - logger.log: "Doorway clear - closing"
-                  - switch.turn_on: buzzer
-                  - delay: 3s
-                  - switch.turn_off: buzzer
-                  - script.execute: pulse_osc
+                  - lambda: 'id(speculative_open) = false;'
+                  - script.execute: wait_clear_then_close
                 else:
-                  - logger.log: "Re-check failed - leaving door open"
+                  - logger.log: "Speculative open unused - closing again"
+                  - script.execute: close_now
           else:
-            - logger.log: "No passage within timeout - leaving door open"
+            - logger.log: "Commanded open - watching for passage"
+            - wait_until:
+                condition:
+                  binary_sensor.is_on: beam_blocked
+                timeout: ${passage_timeout}
+            - if:
+                condition:
+                  binary_sensor.is_on: beam_blocked
+                then:
+                  - script.execute: wait_clear_then_close
+                else:
+                  - logger.log: "No passage within timeout - leaving door open"
 
 # =============================================================================
 #  Cover entity for Home Assistant

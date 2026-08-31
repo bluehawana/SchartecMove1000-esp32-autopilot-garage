@@ -92,3 +92,88 @@ find the mistakes.
 
 Commissioning order is in the README, and steps 1–3 happen with the door on
 manual release. Do not skip them.
+
+---
+
+## 2026-08-31 (later) — The install video reframes the whole project
+
+**The spark, properly identified.** Went looking for the Schartec install video
+(it's on schartec.de, QR code in the manual). It's a fine video — rail,
+brackets, limits, pair the remote — and it **ends with someone standing in
+their garage pressing a button.** That's the thesis of this project in one
+frame: the video ends exactly where our problem starts. Wrote it up in
+`TLDR.md` because it's the clearest statement of why any of this exists.
+
+**Found the number that breaks the naive design: 160 mm/s.** A 2400 mm door
+takes **15 seconds**. Trigger the door at the moment you want to drive through
+and you sit staring at it — worse than a remote, not better. Everything
+restructured around one rule: **never trigger at the moment of need.**
+
+**Speculative vs commanded opens.** The design change that made early
+triggering affordable. Opening 20–30 s early means guessing, and guessing means
+being wrong sometimes (you opened the house door to fetch a screwdriver, now
+the garage is open to the street). So the firmware now tracks *why* the door
+opened: a **speculative** open closes itself after 90 s; a **commanded** one is
+left alone, because a person asked for it. Being wrong became cheap, which is
+what unlocked aggressive early triggers everywhere else.
+
+**"Is the car back?" — a real gap the user caught.** The arrival trigger keyed
+on a phone geofence, which conflates *a person is home* with *a vehicle is
+back*. Two concrete bugs: if your phone is already home the `enter` event never
+fires again (door never opens for you), and a housemate walking home fires it
+when no door is needed. Fixed by sensing the **vehicles**, not the people —
+ultrasonic ranger at the bay for the car, BLE tag under the saddle for the
+bike. Car arrival confirmed by phone-on-car-stereo, bike arrival by the
+companion app's activity recognition. Walking home matches neither and
+correctly opens nothing.
+
+**Indoor early trigger, and why it needs a guard.** The user wanted a detector
+further inside the house. Correct instinct, but a living-room sensor fires all
+evening and you can't cycle the door every time someone crosses to the sofa.
+Added a `button.garage_speculative_open` entry point so out-of-room sensors can
+reach the node via HA, guarded by a "departure armed" window plus a
+vehicle-actually-present check. Noted in the docs that the **hallway outside
+the garage door** is the better mounting spot than the living room — fires far
+less often, keeps most of the head start.
+
+**iOS: CarPlay connect is the standout.** Best departure trigger found. It
+fires as you start the car, ~15 s before you need the door, and it *cannot*
+fire when you're not in the driver's seat — no GPS drift, no false positives.
+Runs over a `local_only` webhook, so it stays unreachable from the internet.
+Concluded no custom app is worth building: the HA Companion app already has
+background location, activity recognition and push, and Shortcuts covers the
+rest. Written up in `docs/ios-setup.md`.
+
+**Speed variant: rejected.** User flagged it's ~30% more. Agreed and documented
+the reasoning — 3 s per cycle you were never waiting on, *and* a lower weight
+limit (100 kg vs 140 kg). Pay 30% more for less capacity, or spend the same
+money on every sensor in the BOM. Anticipation is the right lever, not speed.
+
+**Linked to villalyft.com.** Fits the Villalyftet model: publish real numbers
+as we go. The energy angle is genuine rather than retrofitted — a garage door
+standing open through a Göteborg winter is measurable heat loss, and "I forgot
+to close it" is the usual cause. Close-after-passage caps the door's open time
+at ~35 s per trip.
+
+### Still not verified
+
+Everything from the previous entry still stands (no hardware, `esphome config`
+never run), plus:
+
+- **Ultrasonic bay threshold (2.0 m) is a placeholder.** Must be measured
+  against the actual bay depth and the actual car.
+- **HC-SR04 echo is 5 V** — needs a divider or a 3.3 V-safe module. Not yet
+  chosen.
+- **`esp32_ble_tracker` alongside Wi-Fi, UART and everything else is RAM-heavy.**
+  Flagged in the config as the first thing to drop if the node gets unstable.
+  Untested.
+- **The BLE MAC in the config is a placeholder** (`AA:BB:CC:DD:EE:FF`).
+- **iOS activity-recognition entity names differ** between Android
+  (`on_bicycle`) and iOS (`Cycling`) — needs checking against the real entity.
+- **All head-start timings are estimates**, not stopwatch measurements.
+
+### Next step
+
+Order: Move 1000 (standard, **not** Speed) + photocell, checking rail length
+against door height. Then `pip install esphome && esphome config` for a real
+validation pass before any hardware lands.

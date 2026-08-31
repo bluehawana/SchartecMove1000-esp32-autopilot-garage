@@ -53,21 +53,62 @@
         entity_id: cover.garage_door
 
 # -----------------------------------------------------------------------------
-# 2. ARRIVAL - fully automatic (opt-in).
+# 2. ARRIVAL - fully automatic, BY CAR (opt-in).
 #
-# Only enable this once you trust the setup. Two independent signals must
-# agree, which is what makes it tolerable:
-#   a) phone crossed the home geofence, AND
-#   b) phone is connected to the car stereo over Bluetooth
+# "Someone is home" and "the car is coming home" are different facts. A phone
+# sitting in the living room already satisfies a geofence and will never fire
+# an enter event; a partner walking home fires one but needs no garage door.
 #
-# (b) is the important one - it proves you are IN THE CAR rather than the phone
-# drifting while it sits on the kitchen table. Swap in a BLE beacon or an
-# ESPresense room sensor on the driveway if you don't have car Bluetooth.
+# So we never trigger on presence alone. Two signals must agree:
+#   a) THIS person's tracker crossed the home geofence, and
+#   b) their phone is on the car stereo -> they are physically in the car
+#
+# (b) is the load-bearing one. It is what separates "a human arrived" from
+# "a vehicle arrived", and it kills GPS drift as a failure mode.
 # -----------------------------------------------------------------------------
-- alias: "Garage - auto-open on arrival by car"
-  id: garage_arrival_auto
+- alias: "Garage - auto-open for returning car"
+  id: garage_arrival_car
   mode: single
-  # Disabled by default on purpose. Turn it on in the UI when ready.
+  initial_state: false        # enable once you trust it
+  triggers:
+    - trigger: zone
+      entity_id: device_tracker.phone
+      zone: zone.home
+      event: enter
+  conditions:
+    - condition: state
+      entity_id: cover.garage_door
+      state: "closed"
+    # Proves they are in the car, not just near the house.
+    - condition: state
+      entity_id: sensor.phone_bluetooth_connection
+      state: "MyCarStereo"
+    # The bay is empty, so the car genuinely needs to get in.
+    - condition: state
+      entity_id: binary_sensor.garage_car_present
+      state: "off"
+    - condition: template
+      value_template: >
+        {{ as_timestamp(now())
+           - as_timestamp(states.cover.garage_door.last_changed) > 300 }}
+  actions:
+    - action: cover.open_cover
+      target:
+        entity_id: cover.garage_door
+
+# -----------------------------------------------------------------------------
+# 2b. ARRIVAL - fully automatic, BY BIKE (opt-in).
+#
+# A bike has no Bluetooth and carries no phone of its own, so the car trick
+# does not transfer. Instead we use the companion app's activity recognition:
+# the phone knows it is being carried on a bicycle.
+#
+# Bikes are slower, so the geofence has more time to work - but they also
+# approach from paths a car can't use. Tune the zone radius separately.
+# -----------------------------------------------------------------------------
+- alias: "Garage - auto-open for returning bike"
+  id: garage_arrival_bike
+  mode: single
   initial_state: false
   triggers:
     - trigger: zone
@@ -78,19 +119,54 @@
     - condition: state
       entity_id: cover.garage_door
       state: "closed"
-    # Proves you are in the car, not just near the house.
+    # Android: sensor.phone_detected_activity -> "on_bicycle"
+    # iOS:     sensor.phone_activity          -> "Cycling"
     - condition: state
-      entity_id: sensor.phone_bluetooth_connection
-      state: "MyCarStereo"
-    # Don't re-fire if we already opened in the last few minutes.
-    - condition: template
-      value_template: >
-        {{ as_timestamp(now())
-           - as_timestamp(states.cover.garage_door.last_changed) > 300 }}
+      entity_id: sensor.phone_detected_activity
+      state: "on_bicycle"
+    # The bike is genuinely out, so it needs to come back in.
+    - condition: state
+      entity_id: binary_sensor.garage_bike_present
+      state: "off"
   actions:
     - action: cover.open_cover
       target:
         entity_id: cover.garage_door
+
+# -----------------------------------------------------------------------------
+# 2c. "Is the car / bike back?" - the living-room question.
+#
+# You are inside, someone is still out, and you want to know whether they
+# actually made it home. Presence sensing answers a question a phone cannot:
+# the vehicle itself is what got detected, not a person carrying a handset.
+# -----------------------------------------------------------------------------
+- alias: "Garage - notify when car gets home"
+  id: garage_car_home_notify
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.garage_car_present
+      from: "off"
+      to: "on"
+      for: "00:00:15"
+  actions:
+    - action: notify.mobile_app_phone
+      data:
+        message: "Car is back in the garage."
+
+- alias: "Garage - notify when bike gets home"
+  id: garage_bike_home_notify
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.garage_bike_present
+      from: "off"
+      to: "on"
+      for: "00:00:30"
+  actions:
+    - action: notify.mobile_app_phone
+      data:
+        message: "Bike is back in the garage."
 
 # -----------------------------------------------------------------------------
 # 3. SAFETY NET - door left open.
@@ -192,3 +268,101 @@
     - action: cover.close_cover
       target:
         entity_id: cover.garage_door
+
+# -----------------------------------------------------------------------------
+# 6. iOS TRIGGERS
+#
+# Entry point for Apple Shortcuts "personal automations". The best of these by
+# far is CarPlay connect: it fires the moment you start the car, it cannot fire
+# when you are not in the driver's seat, and it happens while you are still
+# doing up your seatbelt - which is exactly the head start the door needs.
+#
+# local_only: true means this only works on the home network. That is correct
+# for departures (you are in the garage, on Wi-Fi) and it keeps the webhook
+# unreachable from the internet. Arrivals use the zone triggers above instead.
+#
+# Generate a long random webhook_id and keep it out of git:
+#   python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# -----------------------------------------------------------------------------
+- alias: "Garage - open via iOS Shortcut"
+  id: garage_ios_webhook
+  mode: single
+  triggers:
+    - trigger: webhook
+      webhook_id: !secret garage_webhook_id
+      allowed_methods: [POST]
+      local_only: true
+  actions:
+    - action: button.press
+      target:
+        entity_id: button.garage_speculative_open
+
+# -----------------------------------------------------------------------------
+# 7. INDOOR EARLY TRIGGER - a sensor in the hallway or living room.
+#
+# This is the earliest useful signal (~30s of head start), and also the least
+# certain - people cross a living room all evening. It is only safe because a
+# speculative open undoes itself after 90s.
+#
+# Two guards keep it sane:
+#   - "departure armed" (below), so it is not live all evening
+#   - a vehicle must actually be home, or there is nothing to leave in
+#
+# Put the sensor in the HALLWAY OUTSIDE THE GARAGE DOOR if you can. It fires
+# far less often than a living-room sensor and still gives 10-15s of margin.
+# -----------------------------------------------------------------------------
+- alias: "Garage - early open from indoor approach"
+  id: garage_indoor_early
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.hallway_presence
+      from: "off"
+      to: "on"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.garage_departure_armed
+      state: "on"
+    - condition: state
+      entity_id: cover.garage_door
+      state: "closed"
+    # Nothing to leave in? Then this is not a departure.
+    - condition: or
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.garage_car_present
+          state: "on"
+        - condition: state
+          entity_id: binary_sensor.garage_bike_present
+          state: "on"
+  actions:
+    - action: button.press
+      target:
+        entity_id: button.garage_speculative_open
+
+- alias: "Garage - arm departure window on weekday mornings"
+  id: garage_arm_departure
+  triggers:
+    - trigger: time
+      at: "06:30:00"
+  conditions:
+    - condition: time
+      weekday: [mon, tue, wed, thu, fri]
+  actions:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.garage_departure_armed
+
+- alias: "Garage - disarm departure window"
+  id: garage_disarm_departure
+  triggers:
+    - trigger: time
+      at: "09:30:00"
+    # Also disarm as soon as we actually leave - the window has served its job.
+    - trigger: state
+      entity_id: binary_sensor.garage_doorway_beam_blocked
+      to: "on"
+  actions:
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.garage_departure_armed

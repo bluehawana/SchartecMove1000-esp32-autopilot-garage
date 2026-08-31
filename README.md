@@ -19,6 +19,47 @@ morning, leaving:
 All of that logic runs **on the ESP32**, not in Home Assistant. The door keeps
 working when Wi-Fi or HA is down.
 
+## Where this came from
+
+We started by watching the [Schartec installation video](https://www.schartec.de)
+— the one the QR code in the manual points to. Rail, brackets, motor head, set
+the limits, pair the remote, done. It's a good video.
+
+It ends with someone standing in their garage, pressing a button.
+
+**That's exactly where our problem starts.** Following it perfectly gets you a
+motor on a door. It doesn't get you a garage you'll actually use — because a
+remote still costs you a small ritual every time: find it, press it, wait,
+drive through, wonder later whether it closed. None of that is hard. It's just
+enough friction that the garage becomes a storage room and the car lives on the
+driveway.
+
+So the functionality we actually need isn't remote control. It's **no control**.
+
+See [TL;DR.md](TLDR.md) for the short version, or
+[docs/experience-design.md](docs/experience-design.md) for the full
+choreography and timings.
+
+## The number that shapes the whole design
+
+The Move 1000 travels at **160 mm/s**. A 2400 mm door takes **~15 seconds**.
+
+That rules out the obvious approach. Trigger the door when you *want* to drive
+through and you sit staring at it for fifteen seconds — worse than a remote,
+not better. So every trigger fires **before** the moment of need:
+
+- **Going out:** **CarPlay connecting** (~15 s ahead — it fires as you start
+  the car and cannot fire when you're not in the driver's seat), the internal
+  **house→garage door** contact (~20 s), and an optional hallway sensor (~30 s)
+- **Coming home:** a **~250 m geofence**, ~30 s out at residential speed
+- **Closing:** a beam that **breaks then clears** — the exact signal that a car
+  or bike has passed through, and it works the same for both
+
+Opening early is only affordable if being wrong is cheap, so the firmware
+tracks *why* the door opened. A **speculative** open (house door) that nobody
+uses **closes itself after 90 s**. A **commanded** open (remote/app) is left
+alone — a person asked for that, so we don't second-guess it.
+
 ## Why this is needed at all
 
 The Move 1000 is a good base — it exposes an **O/S/C dry-contact terminal**,
@@ -35,14 +76,18 @@ input. That's all we need it to be.
 ## Repo layout
 
 ```
+TLDR.md                    the initiative: spark, gap, and how we get there
 esphome/
   garage-schartec.yaml     firmware — sensors, relay, all close logic
   secrets.yaml.example     copy to secrets.yaml (gitignored)
 homeassistant/
   automations.yaml         arrival, safety nets, night guard
 docs/
+  experience-design.md     choreography, timings, what breaks "butter"
+  ios-setup.md             Companion app, HomeKit, Shortcuts automations
   hardware.md              BOM, terminal map, pinout, wiring
   safety.md                EN 12453, failure modes — read before enabling
+  working-diary.md         session log
 ```
 
 ## Quick start
@@ -87,11 +132,15 @@ Do not skip steps 1–3. Test with the **door disconnected from the opener**
 | `cover.garage_door` | Cover | Open / close / stop |
 | `switch.garage_auto_open` | Switch | **Turn off when working in the garage** |
 | `switch.garage_auto_close` | Switch | Kill switch for close-after-passage |
+| `button.garage_speculative_open` | Button | Entry point for iOS / other-room triggers |
 | `binary_sensor.garage_closed_limit` | Binary | Reed |
 | `binary_sensor.garage_open_limit` | Binary | Reed |
 | `binary_sensor.garage_doorway_beam_blocked` | Binary | Independent beam |
+| `binary_sensor.garage_house_door` | Binary | House→garage door — the early trigger |
 | `binary_sensor.garage_inner_approach` | Binary | LD2410, < 2 m, 1.5 s dwell |
 | `binary_sensor.garage_occupancy` | Binary | LD2410 presence |
+| `binary_sensor.garage_car_present` | Binary | Ultrasonic — is the car actually back? |
+| `binary_sensor.garage_bike_present` | Binary | BLE beacon — is the bike actually back? |
 
 ## Tuning
 
@@ -102,6 +151,7 @@ Everything worth adjusting is in `substitutions:` at the top of the YAML:
 | `pulse_length` | `400ms` | The opener misses presses |
 | `clear_dwell` | `8s` | A long car's tail is still under the door |
 | `passage_timeout` | `5min` | You linger before pulling out |
+| `speculative_timeout` | `90s` | Your walk-and-load takes longer |
 | `cycle_cooldown_ms` | `60000` | It reopens as you walk back past |
 
 The 200 cm approach threshold is in the `approach_zone` lambda — set it to
@@ -115,6 +165,22 @@ The short version: a door that closes with nobody watching is a different
 category of machine under EN 12453 than one you drive by remote while looking
 at it. The photocell is mandatory, not optional. Every failure path in this
 firmware leaves the door **open and stationary** rather than moving.
+
+## Part of Villalyftet
+
+This project is documented as part of **[villalyft.com](https://villalyft.com)**
+— the Askim neighbourhood group-buy initiative for home energy improvements —
+and follows the same rule the site sets for itself: publish the real numbers,
+including the ones that didn't work out.
+
+The energy angle is not a stretch. A garage door left standing open through a
+Göteborg winter is a measurable heat loss, and "I forgot to close it" is the
+most common way it happens. Close-after-passage removes that failure mode
+entirely — the door is open for the ~35 seconds it takes to drive through, and
+not a minute longer.
+
+If neighbours want the same setup, the parts list is the parts list. That's
+the Villalyftet model.
 
 ## Status
 

@@ -11,11 +11,20 @@
 | Opto-isolated relay module (1ch) | Dry contact onto O/S/C | ~€3 |
 | HLK-LD2410 (or LD2410C) | mmWave inner-approach sensor | ~€8 |
 | 2× NC reed switch + magnet | Open / closed limits | ~€5 |
+| Door contact (reed) | House→garage door — the early trigger | ~€5 |
+| HC-SR04 ultrasonic | Car-present in the bay | ~€3 |
+| BLE beacon tag | Bike identity (under the saddle) | ~€10 |
 | Piezo buzzer 3–5 V | Pre-close warning | ~€2 |
 | 24 V flashing warning light, ≤100 mA | Travel warning, driven by the opener | ~€15 |
 | 5 V USB PSU **or** 24 V→5 V buck | Powers ESP32 + LD2410 | ~€6 |
 
-Roughly **€90 on top of the opener**.
+Roughly **€110 on top of the opener**.
+
+**Skip the Move 1000-Speed.** It's ~30% more for 200 mm/s vs 160 mm/s — about
+3 s per door cycle — and it drops the weight limit from 140 kg to 100 kg. With
+predictive triggering you were never waiting on those 3 s anyway. That 30%
+buys every sensor in the table above instead. See
+[experience-design.md](experience-design.md).
 
 > Buying the opener: the standard kit ships a **K-rail (~3155 mm total), good for a
 > sectional door up to 2400 mm high**. Taller doors need the M-rail (3655 mm) or
@@ -60,6 +69,9 @@ setting in the menu. Every bit of "hold, then close" behaviour is ours.
 | 25 | Doorway beam receiver | Input, pullup, inverted |
 | 16 | LD2410 RX | UART TX |
 | 17 | LD2410 TX | UART RX |
+| 13 | House→garage door contact | Input, pullup, inverted |
+| 18 | HC-SR04 trigger | Output |
+| 19 | HC-SR04 echo | Input — **5 V, needs a divider** |
 
 > Use an **ESP32-WROOM**, not a WROVER — GPIO16/17 are tied up by PSRAM on
 > WROVER boards.
