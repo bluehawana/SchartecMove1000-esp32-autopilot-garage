@@ -48,9 +48,10 @@ That rules out the obvious approach. Trigger the door when you *want* to drive
 through and you sit staring at it for fifteen seconds — worse than a remote,
 not better. So every trigger fires **before** the moment of need:
 
-- **Going out:** **CarPlay connecting** (~15 s ahead — it fires as you start
-  the car and cannot fire when you're not in the driver's seat), the internal
-  **house→garage door** contact (~20 s), and an optional hallway sensor (~30 s)
+- **Going out:** a cascade — phone **roams to the ground-floor mesh node**
+  (~40–60 s), **hallway** presence (~30 s), the internal **house→garage door**
+  contact (~20 s), and the phone **pairing to the car's Bluetooth** (~15 s,
+  and certain — it can't fire when you're not in the car)
 - **Coming home:** a **~250 m geofence**, ~30 s out at residential speed
 - **Closing:** a beam that **breaks then clears** — the exact signal that a car
   or bike has passed through, and it works the same for both
@@ -85,6 +86,7 @@ homeassistant/
 docs/
   experience-design.md     choreography, timings, what breaks "butter"
   ios-setup.md             Companion app, HomeKit, Shortcuts automations
+  presence-network.md      using the ASUS BD8 mesh for floor-level presence
   hardware.md              BOM, terminal map, pinout, wiring
   safety.md                EN 12453, failure modes — read before enabling
   working-diary.md         session log

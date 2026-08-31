@@ -177,3 +177,56 @@ never run), plus:
 Order: Move 1000 (standard, **not** Speed) + photocell, checking rail length
 against door height. Then `pip install esphome && esphome config` for a real
 validation pass before any hardware lands.
+
+### Corrections to the above (same session)
+
+- **CarPlay was wrong.** The car is a **Toyota Prius+ (2016)** — no CarPlay.
+  The trigger is plain **Bluetooth pairing**, which the Shortcuts automation
+  supports identically ("When Bluetooth connects → Toyota"). Same ~15 s head
+  start, same zero-false-positive property. Also noted the HA Companion app
+  exposes `sensor.<phone>_bluetooth_connection`, so HA can watch the same event
+  without Shortcuts — run both, they cover each other's failure modes.
+- **Wi-Fi evaluated and mostly rejected as a trigger.** Joining home Wi-Fi means
+  you're already ~20–50 m out, which is too late to cover 15 s of travel.
+  Bluetooth wins because it identifies *which vehicle*, not just *roughly where*.
+- **Single-person assumption was wrong.** Arrival automations now trigger on any
+  household member and check *that specific person's* Bluetooth/activity sensor
+  via a variables mapping. Checking the wrong person's phone would open the door
+  for someone sitting in the living room.
+
+## 2026-08-31 (later still) — The BD8 mesh as a presence layer
+
+**User has three ASUS ZenWiFi BD8 nodes, one per floor.** That's a coarse
+indoor positioning system they already own, so wrote up how to use it.
+
+**Reframed the goal, which was the more useful contribution.** The ask was "not
+15 seconds, maybe 5." But you can't make the Move 1000 travel faster — 160 mm/s
+is a belt and physics. **The target isn't 5 seconds, it's zero**, and the way
+there is starting earlier, never moving faster. A door that took 15 s but began
+moving 20 s ago was never waited on.
+
+**Built the trigger cascade** — four layers, each earlier and less certain:
+floor change (40–60 s) → hallway (30 s) → house door (20 s) → Bluetooth (15 s).
+They overlap deliberately; first to fire wins, cooldown stops them fighting,
+wrong guesses self-close. Layer 3 alone already covers the travel time.
+
+**Stated the limitation honestly rather than selling the clever thing.** Wi-Fi
+roaming is sticky — iOS often won't leave an AP until ~−70 dBm, so a
+three-floor descent might register in 5 seconds or 45. 802.11k/v/r helps and
+should be on, but doesn't fix it. So mesh node tracking is good for *coarse
+context* and bad as a precision timer. Recommended **Bermuda/ESPresense BLE**
+(~€8/node, 1–2 s, room-level) as the real precision layer, reusing the same
+BLE tag already planned for the bike.
+
+**Recommended build order deliberately puts the clever thing last:** house-door
+contact and Bluetooth first (cheap, certain, probably sufficient), live with it
+a week, measure whether anyone is actually ever waiting, and only then add the
+mesh/BLE layers if the data justifies it.
+
+### Additionally unverified
+
+- **AiMesh per-client node attribution** via the `asusrouter` HACS integration
+  is the one thing here I couldn't check at all. Firmware-dependent. Flagged
+  inline in the doc — verify before building on it.
+- Node names in the template sensor (`BD8-Attic` etc.) are placeholders.
+- All cascade head-start figures remain estimates, not stopwatch measurements.

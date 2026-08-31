@@ -66,24 +66,36 @@
 # (b) is the load-bearing one. It is what separates "a human arrived" from
 # "a vehicle arrived", and it kills GPS drift as a failure mode.
 # -----------------------------------------------------------------------------
-- alias: "Garage - auto-open for returning car"
+- alias: "Garage - auto-open for returning household member (by car)"
   id: garage_arrival_car
   mode: single
   initial_state: false        # enable once you trust it
   triggers:
+    # Any household member. Add or remove trackers here.
     - trigger: zone
-      entity_id: device_tracker.phone
+      entity_id:
+        - device_tracker.owner_phone
+        - device_tracker.partner_phone
       zone: zone.home
       event: enter
+  variables:
+    # Which person triggered, and therefore which Bluetooth sensor to check.
+    # Checking the WRONG person's phone is how you open the door for someone
+    # who is sitting in the living room.
+    bt_sensor: >
+      {{ {'device_tracker.owner_phone':   'sensor.owner_phone_bluetooth_connection',
+          'device_tracker.partner_phone': 'sensor.partner_phone_bluetooth_connection'
+         }.get(trigger.entity_id, 'sensor.does_not_exist') }}
+    who: "{{ trigger.to_state.name }}"
   conditions:
     - condition: state
       entity_id: cover.garage_door
       state: "closed"
-    # Proves they are in the car, not just near the house.
-    - condition: state
-      entity_id: sensor.phone_bluetooth_connection
-      state: "MyCarStereo"
-    # The bay is empty, so the car genuinely needs to get in.
+    # That specific person is in the car. Toyota Prius+ pairs over plain
+    # Bluetooth - check Settings > Bluetooth for the exact pairing name.
+    - condition: template
+      value_template: "{{ 'Toyota' in (states(bt_sensor) | default('', true)) }}"
+    # The bay is empty, so a car genuinely needs to get in.
     - condition: state
       entity_id: binary_sensor.garage_car_present
       state: "off"
@@ -95,6 +107,9 @@
     - action: cover.open_cover
       target:
         entity_id: cover.garage_door
+    - action: notify.mobile_app_phone
+      data:
+        message: "Opening the garage - {{ who }} is home."
 
 # -----------------------------------------------------------------------------
 # 2b. ARRIVAL - fully automatic, BY BIKE (opt-in).
@@ -112,18 +127,24 @@
   initial_state: false
   triggers:
     - trigger: zone
-      entity_id: device_tracker.phone
+      entity_id:
+        - device_tracker.owner_phone
+        - device_tracker.partner_phone
       zone: zone.home
       event: enter
+  variables:
+    activity_sensor: >
+      {{ {'device_tracker.owner_phone':   'sensor.owner_phone_activity',
+          'device_tracker.partner_phone': 'sensor.partner_phone_activity'
+         }.get(trigger.entity_id, 'sensor.does_not_exist') }}
   conditions:
     - condition: state
       entity_id: cover.garage_door
       state: "closed"
-    # Android: sensor.phone_detected_activity -> "on_bicycle"
-    # iOS:     sensor.phone_activity          -> "Cycling"
-    - condition: state
-      entity_id: sensor.phone_detected_activity
-      state: "on_bicycle"
+    # iOS reports "Cycling"; Android reports "on_bicycle". Accept either.
+    - condition: template
+      value_template: >
+        {{ states(activity_sensor) in ['Cycling', 'on_bicycle'] }}
     # The bike is genuinely out, so it needs to come back in.
     - condition: state
       entity_id: binary_sensor.garage_bike_present
