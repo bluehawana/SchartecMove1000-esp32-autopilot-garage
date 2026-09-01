@@ -588,3 +588,35 @@ A separate API key for the indoor node, not a shared one.
 - `binary_sensor.hall_presence` in the automations is a placeholder name; it
   must be swapped for whatever the real sensor turns out to be.
 - Pin choices on the indoor node are untested on real silicon.
+
+### Same session — HA config, and two bugs the audit turned up
+
+Collected the Home Assistant snippets that were scattered across
+deployment.md, ios-setup.md and presence-network.md into one
+`homeassistant/configuration.yaml`, ready to merge.
+
+**Auditing entity references against definitions found two real problems:**
+
+1. **`input_boolean.garage_departure_armed` and `group.family` were never
+   defined anywhere.** Both are referenced by automations — the departure gate
+   and the away-guard. They would have thrown errors on every run. Neither is
+   optional decoration; without the input_boolean the hall sensor would open
+   the garage every time someone crossed the hall at nine in the evening.
+2. **A leftover `device_tracker.phone`** in the arrival-notification automation,
+   from before arrival went multi-person. Every other arrival automation had
+   been converted; that one was missed. Fixed to trigger on both trackers.
+
+Also documented an intentional bit that reads like a mistake: the
+`sensor.does_not_exist` fallback in the per-person sensor mapping. An unmapped
+tracker resolves to a nonexistent entity, reads `unknown`, the condition fails
+and the door stays shut. **Fail closed.** Added a comment so nobody "fixes" it.
+
+The home zone radius is set to **120 m** in the file, with the reasoning inline
+rather than left as a bare number.
+
+### Not verified
+
+- No HA instance exists yet, so nothing here has been loaded.
+- `sensor.*_esphome_version` in the recorder entity_globs assumes the default
+  naming; confirm once the nodes are adopted.
+- Zone latitude/longitude are `0.0000000` placeholders.

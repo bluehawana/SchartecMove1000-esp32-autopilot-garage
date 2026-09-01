@@ -89,7 +89,8 @@ esphome/
   indoor-node.yaml         laundry node — the departure triggers
   secrets.yaml.example     copy to secrets.yaml (gitignored)
 homeassistant/
-  automations.yaml         arrival, safety nets, night guard
+  configuration.yaml       helpers, recorder, HomeKit — merge into yours
+  automations.yaml         departure, arrival, safety nets
 docs/
   measurements.md          ← what to measure on site, before ordering
   deployment.md            where each box lives — Pi indoors, ESP32 in the garage
@@ -167,8 +168,11 @@ A full compile also passes, which additionally type-checks the C++ lambdas:
 .venv/bin/esphome run esphome/indoor-node.yaml
 ```
 
-Wire it up per [docs/hardware.md](docs/hardware.md), then copy
-`homeassistant/automations.yaml` into your HA config and fix the entity names.
+Wire it up per [docs/hardware.md](docs/hardware.md). Then merge
+`homeassistant/configuration.yaml` into yours — it defines the helpers the
+automations depend on (`input_boolean.garage_departure_armed`, `group.family`,
+the home zone), plus the recorder excludes and the HomeKit bridge. Copy
+`automations.yaml` alongside it and fix the entity names to match yours.
 
 ## Commissioning order
 

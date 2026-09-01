@@ -1,0 +1,121 @@
+# =============================================================================
+#  Home Assistant configuration — Schartec Move 1000 Autopilot
+# =============================================================================
+#  These are SNIPPETS to merge into your own configuration.yaml, not a complete
+#  file. If a key already exists in yours, merge the contents rather than
+#  pasting a second copy — HA refuses to start on duplicate top-level keys.
+#
+#  The helpers below are not optional decoration: automations.yaml references
+#  input_boolean.garage_departure_armed and group.family, and will throw errors
+#  on every run until they exist.
+#
+#  After editing:  Developer Tools → YAML → Check configuration
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Helpers the automations depend on
+# -----------------------------------------------------------------------------
+input_boolean:
+  garage_departure_armed:
+    # Gates the indoor triggers. Without this the hall sensor would open the
+    # garage every time someone crosses the hall at nine in the evening.
+    # Armed on weekday mornings and disarmed once you actually leave — see the
+    # arm/disarm automations.
+    name: Garage departure armed
+    icon: mdi:car-clock
+
+# -----------------------------------------------------------------------------
+# Who counts as "everyone", for the away-guard automation
+# -----------------------------------------------------------------------------
+group:
+  family:
+    name: Family
+    entities:
+      - device_tracker.owner_phone
+      - device_tracker.partner_phone
+
+# -----------------------------------------------------------------------------
+# Home zone
+# -----------------------------------------------------------------------------
+#  Deliberately SMALL. The obvious sizing is "big enough that the door has
+#  finished before I arrive" (~250 m), but there is off-street parking in front
+#  of this garage: arriving, you pull onto your own spot and line up while the
+#  door opens, blocking nobody. That wait costs nothing, so a tight radius wins
+#  — less time standing open and unattended, fewer false opens.
+#
+#  Departure needs anticipation. Arrival does not.
+#
+#  Set latitude/longitude to your own. If you have no off-street spot and
+#  waiting means blocking traffic, size up and accept the exposure.
+zone:
+  - name: Home
+    latitude: 0.0000000      # TODO
+    longitude: 0.0000000     # TODO
+    radius: 120              # metres
+    icon: mdi:home
+
+# -----------------------------------------------------------------------------
+# Recorder — keep the database small
+# -----------------------------------------------------------------------------
+#  Automations read the state machine in RAM; the recorder exists only for
+#  history graphs and the logbook. So the test is simply: will anyone ever look
+#  at a graph of this?
+#
+#  For the continuous numeric sensors the answer is no — the raw mmWave distance
+#  sets a threshold once, and what you want from the bay sensor is
+#  binary_sensor.garage_car_present, not the centimetres. They are already
+#  disabled_by_default on the nodes; these excludes are belt and braces in case
+#  someone enables one for tuning and forgets to disable it again.
+#
+#  The useful history is naturally tiny: a garage opens maybe ten times a day.
+recorder:
+  purge_keep_days: 7
+  commit_interval: 30        # default 1s; batching cuts write operations hard
+  exclude:
+    entities:
+      - sensor.garage_moving_distance
+      - sensor.garage_still_distance
+      - sensor.garage_bay_distance
+      - sensor.garage_wifi_signal
+      - sensor.indoor_node_wifi_signal
+    entity_globs:
+      - sensor.*_esphome_version
+
+# -----------------------------------------------------------------------------
+# HomeKit bridge — Siri, Control Center, Apple Watch
+# -----------------------------------------------------------------------------
+#  Needs mDNS on host networking, which is why Home Assistant OS on the Pi wins
+#  over Docker on macOS for this. See docs/deployment.md.
+#
+#  Exposing only the cover is deliberate: the internal sensors would clutter the
+#  Home app, and the auto-open switch is not something to hand to Siri.
+homekit:
+  - name: Garage Bridge
+    filter:
+      include_entities:
+        - cover.garage_door
+
+# -----------------------------------------------------------------------------
+# Floor-level presence from the ASUS BD8 mesh (optional, layer 1)
+# -----------------------------------------------------------------------------
+#  Only needed if the stopwatch says the hall sensor alone is not enough — see
+#  docs/measurements.md. Requires the `asusrouter` HACS integration for AiMesh
+#  per-client node attribution, which is firmware-dependent and unverified here.
+#
+#  Rename the nodes to match yours. Wi-Fi roaming is sticky, so treat this as
+#  coarse context, never a precision timer.
+#
+# template:
+#   - sensor:
+#       - name: "Owner Floor"
+#         state: >
+#           {% set ap = state_attr('device_tracker.owner_phone', 'connected_to') %}
+#           {% if   ap == 'BD8-Attic'  %} 3
+#           {% elif ap == 'BD8-Middle' %} 2
+#           {% elif ap == 'BD8-Ground' %} 1
+#           {% else %} unknown {% endif %}
+
+# -----------------------------------------------------------------------------
+# Load the automations
+# -----------------------------------------------------------------------------
+automation: !include automations.yaml

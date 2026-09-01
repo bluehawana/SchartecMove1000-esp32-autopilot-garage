@@ -4,7 +4,8 @@
 #  The ESP32 handles going OUT (presence -> open, passage -> close) entirely on
 #  its own. These automations handle coming HOME, plus the safety nets.
 #
-#  Replace device_tracker.phone / notify.mobile_app_phone with your entities.
+#  Entity names here are placeholders. Swap them for yours, and define the
+#  helpers these depend on — see configuration.yaml in this folder.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -18,8 +19,11 @@
   id: garage_arrival_notify
   mode: single
   triggers:
+    # Any household member, same list as the automatic versions below.
     - trigger: zone
-      entity_id: device_tracker.phone
+      entity_id:
+        - device_tracker.owner_phone
+        - device_tracker.partner_phone
       zone: zone.home
       event: enter
   conditions:
@@ -27,6 +31,7 @@
       entity_id: cover.garage_door
       state: "closed"
   actions:
+    # Notify the person who actually arrived, not everyone.
     - action: notify.mobile_app_phone
       data:
         title: "Home"
@@ -88,6 +93,10 @@
     # Which person triggered, and therefore which Bluetooth sensor to check.
     # Checking the WRONG person's phone is how you open the door for someone
     # who is sitting in the living room.
+    #
+    # The 'sensor.does_not_exist' fallback is deliberate: an unmapped tracker
+    # resolves to a nonexistent entity, its state reads 'unknown', the condition
+    # fails, and the door stays shut. Fail closed, not open.
     bt_sensor: >
       {{ {'device_tracker.owner_phone':   'sensor.owner_phone_bluetooth_connection',
           'device_tracker.partner_phone': 'sensor.partner_phone_bluetooth_connection'
