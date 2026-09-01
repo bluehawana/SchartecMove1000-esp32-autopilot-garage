@@ -1,0 +1,106 @@
+# =============================================================================
+#  Indoor node — laundry room, beside the network cabinet
+# =============================================================================
+#  The garage has NO internal door from the house. To reach the car you leave
+#  the house and walk round, so the door must already be opening before you get
+#  there. Every useful departure trigger therefore lives INSIDE the house,
+#  while the door hardware lives in the garage — and the two are separate
+#  structures. Hence a second node.
+#
+#  This node reports triggers; it never drives the door. Home Assistant relays
+#  them to button.garage_speculative_open on the garage node.
+#
+#  DEPENDENCY, stated honestly: the OPEN trigger goes through Home Assistant,
+#  so if HA is down you open the door with the remote in your pocket. The
+#  CLOSE logic stays entirely on the garage node and is unaffected — that is
+#  the half where failing badly would actually matter.
+#
+#  Board: any ESP32/ESP8266 dev board. Mains-adjacent in the cabinet area, so
+#  use a proper USB PSU, not a phone charger of unknown origin.
+# =============================================================================
+
+substitutions:
+  device_name: garage-indoor
+  # A door left ajar should not look like a fresh departure for hours.
+  door_open_debounce: 300ms
+
+esphome:
+  name: ${device_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${device_name} fallback"
+    password: !secret fallback_password
+
+captive_portal:
+logger:
+
+api:
+  encryption:
+    key: !secret indoor_api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+binary_sensor:
+  # --- The exterior door of the laundry room -------------------------------
+  # This is the LAST on-property signal before you are outside walking to the
+  # garage, and it is already late: that walk is only 3-6 s against 15 s of
+  # door travel. It is a cheap backup, not the primary trigger.
+  #
+  # Wired NC to GND with pullup + inverted, so a cut wire reads "closed" and
+  # nothing is triggered by a fault.
+  - platform: gpio
+    id: laundry_exterior_door
+    name: "Laundry Exterior Door"
+    device_class: door
+    pin:
+      number: GPIO32
+      mode: { input: true, pullup: true }
+      inverted: true
+    filters:
+      - delayed_on_off: ${door_open_debounce}
+
+  # --- Optional wired hall sensor ------------------------------------------
+  # The PRIMARY departure trigger is hall presence (~10-14 s of head start).
+  # An off-the-shelf Zigbee/Wi-Fi sensor reporting straight to HA is usually
+  # easier than pulling cable between rooms - in that case leave this input
+  # unused and let HA trigger from that entity instead.
+  #
+  # Wire a PIR or mmWave module here only if a cable run is convenient.
+  - platform: gpio
+    id: hall_presence_wired
+    name: "Hall Presence (wired)"
+    device_class: motion
+    pin:
+      number: GPIO33
+      mode: { input: true, pullup: true }
+      inverted: true
+    filters:
+      # Same dwell logic as the garage node's approach_zone: someone crossing
+      # the hall on the way to the kitchen should not open the garage.
+      - delayed_on: 1500ms
+      - delayed_off: 3s
+
+sensor:
+  - platform: wifi_signal
+    name: "Indoor Node Wi-Fi Signal"
+    # Diagnostic only. Disabled by default so it is never recorded - see the
+    # note in garage-schartec.yaml about what belongs in the database.
+    entity_category: diagnostic
+    disabled_by_default: true
+    update_interval: 120s
+
+text_sensor:
+  - platform: version
+    name: "Indoor Node ESPHome Version"
+    entity_category: diagnostic
+    disabled_by_default: true

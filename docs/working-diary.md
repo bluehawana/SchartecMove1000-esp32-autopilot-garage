@@ -550,3 +550,41 @@ dangerous, and no amount of correct firmware compensates for an unbalanced door.
 
 Every placeholder in the firmware is cross-referenced to the measurement that
 replaces it, so there is no guessing about which number goes where.
+
+## 2026-09-01 — Filled the hole yesterday's redesign left
+
+Yesterday's floor-plan correction moved every departure trigger indoors and
+added an indoor ESP32 to the BOM — but `esphome/` still held only the garage
+node. The repo described a two-node system and shipped one. Fixed.
+
+**`esphome/indoor-node.yaml`** — laundry exterior door contact, plus an optional
+wired hall input for anyone who would rather pull cable than buy a wireless
+sensor. Validated and compiled: **RAM 25.3%, Flash 48.2%**. Much lighter than
+the garage node, which carries the whole Bluedroid stack for the bike tag.
+
+Applied yesterday's database lesson from the start rather than retrofitting it:
+diagnostics are `entity_category: diagnostic` + `disabled_by_default`, so
+nothing high-rate is ever recorded.
+
+**Rewrote the HA automations** that were still placeholders — hall presence as
+the primary trigger, the laundry door as an honest backup. Both press
+`button.garage_speculative_open`; a double-fire is harmless because the garage
+node ignores a second press inside its 60 s cooldown.
+
+**Recorded a dependency rather than hiding it.** The open trigger now routes
+through Home Assistant, which is a step back from "works without HA". Written
+into the config header and the README instead of glossed: if HA is down you use
+the remote, and the *close* logic — the half where failing badly actually
+matters — stays entirely on the garage node.
+
+A separate API key for the indoor node, not a shared one.
+
+### Not verified
+
+- Neither node has run on hardware.
+- **The wired hall input is speculative** — the recommendation is still an
+  off-the-shelf wireless sensor, since the hall is a different room from the
+  laundry. The GPIO exists for whoever finds a cable run convenient.
+- `binary_sensor.hall_presence` in the automations is a placeholder name; it
+  must be swapped for whatever the real sensor turns out to be.
+- Pin choices on the indoor node are untested on real silicon.

@@ -325,25 +325,31 @@
         entity_id: button.garage_speculative_open
 
 # -----------------------------------------------------------------------------
-# 7. INDOOR EARLY TRIGGER - a sensor in the hallway or living room.
+# 7. INDOOR TRIGGERS — this is the mechanism, not an optimisation.
 #
-# This is the earliest useful signal (~30s of head start), and also the least
-# certain - people cross a living room all evening. It is only safe because a
-# speculative open undoes itself after 90s.
+# The garage has no internal door from the house. You walk outside and round to
+# the main door, so it must already be opening before you arrive. That rules out
+# every trigger inside the garage, and it rules out Bluetooth-to-car (by the
+# time you are in the car, the door had to be open already).
 #
-# Two guards keep it sane:
-#   - "departure armed" (below), so it is not live all evening
-#   - a vehicle must actually be home, or there is nothing to leave in
+# Head start, measured against 15s of door travel:
 #
-# Put the sensor in the HALLWAY OUTSIDE THE GARAGE DOOR if you can. It fires
-# far less often than a living-room sensor and still gives 10-15s of margin.
+#   Hall presence            ~10-14 s   ← PRIMARY
+#   Laundry exterior door     3-6  s    ← backup, honestly late
+#
+# Both are speculative opens: if nobody drives out, the door closes itself
+# again after 90s. That is what makes triggering early affordable.
+#
+# Swap binary_sensor.hall_presence for whatever your hall sensor actually is —
+# an off-the-shelf Zigbee/Wi-Fi unit, or the wired input on the indoor node
+# (binary_sensor.hall_presence_wired).
 # -----------------------------------------------------------------------------
-- alias: "Garage - early open from indoor approach"
-  id: garage_indoor_early
+- alias: "Garage - open on hall presence (primary)"
+  id: garage_indoor_hall
   mode: single
   triggers:
     - trigger: state
-      entity_id: binary_sensor.hallway_presence
+      entity_id: binary_sensor.hall_presence
       from: "off"
       to: "on"
   conditions:
@@ -353,7 +359,7 @@
     - condition: state
       entity_id: cover.garage_door
       state: "closed"
-    # Nothing to leave in? Then this is not a departure.
+    # Nothing to leave in means this is not a departure.
     - condition: or
       conditions:
         - condition: state
@@ -363,6 +369,36 @@
           entity_id: binary_sensor.garage_bike_present
           state: "on"
   actions:
+    - action: button.press
+      target:
+        entity_id: button.garage_speculative_open
+
+- alias: "Garage - open on laundry door (backup)"
+  id: garage_indoor_laundry_door
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.laundry_exterior_door
+      from: "off"
+      to: "on"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.garage_departure_armed
+      state: "on"
+    - condition: state
+      entity_id: cover.garage_door
+      state: "closed"
+    - condition: or
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.garage_car_present
+          state: "on"
+        - condition: state
+          entity_id: binary_sensor.garage_bike_present
+          state: "on"
+  actions:
+    # Harmless if the hall sensor already fired - the garage node ignores a
+    # second press inside its 60s cooldown.
     - action: button.press
       target:
         entity_id: button.garage_speculative_open

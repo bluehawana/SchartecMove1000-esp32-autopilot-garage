@@ -85,7 +85,8 @@ input. That's all we need it to be.
 ```
 TLDR.md                    the initiative: spark, gap, and how we get there
 esphome/
-  garage-schartec.yaml     firmware — sensors, relay, all close logic
+  garage-schartec.yaml     garage node — sensors, relay, all close logic
+  indoor-node.yaml         laundry node — the departure triggers
   secrets.yaml.example     copy to secrets.yaml (gitignored)
 homeassistant/
   automations.yaml         arrival, safety nets, night guard
@@ -146,8 +147,12 @@ A full compile also passes, which additionally type-checks the C++ lambdas:
 .venv/bin/esphome compile esphome/garage-schartec.yaml
 ```
 
-> ✅ **Compiles clean.** `RAM 56.9%` (70,916 / 124,580 B) ·
-> `Flash 70.9%` (1,300,347 / 1,835,008 B).
+> ✅ **Both nodes compile clean** (ESPHome 2026.8.2):
+>
+> | Node | RAM | Flash |
+> |---|---|---|
+> | garage-schartec | 56.9% (70,916 B) | 70.9% (1,300,347 B) |
+> | indoor-node | 25.3% (45,640 B) | 48.2% (885,159 B) |
 >
 > The RAM figure is the one to watch: enabling `esp32_ble_tracker` pulls in the
 > whole Bluedroid stack alongside Wi-Fi. It **fits**, with ~53 KB spare — but
@@ -159,6 +164,7 @@ A full compile also passes, which additionally type-checks the C++ lambdas:
 
 ```bash
 .venv/bin/esphome run esphome/garage-schartec.yaml
+.venv/bin/esphome run esphome/indoor-node.yaml
 ```
 
 Wire it up per [docs/hardware.md](docs/hardware.md), then copy
@@ -189,7 +195,8 @@ Do not skip steps 1–3. Test with the **door disconnected from the opener**
 | `binary_sensor.garage_closed_limit` | Binary | Reed |
 | `binary_sensor.garage_open_limit` | Binary | Reed |
 | `binary_sensor.garage_doorway_beam_blocked` | Binary | Independent beam |
-| `binary_sensor.garage_house_door` | Binary | House→garage door — the early trigger |
+| `binary_sensor.laundry_exterior_door` | Binary | Indoor node — departure backup trigger |
+| `binary_sensor.hall_presence_wired` | Binary | Indoor node — optional wired hall input |
 | `binary_sensor.garage_inner_approach` | Binary | LD2410, < 2 m, 1.5 s dwell |
 | `binary_sensor.garage_occupancy` | Binary | LD2410 presence |
 | `binary_sensor.garage_car_present` | Binary | Ultrasonic — is the car actually back? |
@@ -211,6 +218,21 @@ Everything worth adjusting is in `substitutions:` at the top of the YAML:
 
 The 200 cm approach threshold is in the `approach_zone` lambda — set it to
 comfortably less than the distance from the sensor to where you park.
+
+## Two nodes, and what depends on what
+
+| Node | Where | Job | Needs HA? |
+|---|---|---|---|
+| **garage-schartec** | Garage | Door control, beam, reeds, presence, bay sensor. **All close logic.** | **No** |
+| **indoor-node** | Laundry room | Departure triggers | Relays via HA |
+
+The garage has no internal door, so departure triggers live in the house while
+the door hardware lives in the garage — and they are separate structures.
+
+**Stated plainly:** the *open* trigger goes through Home Assistant, so if HA is
+down you press the remote in your pocket. The *close* logic is entirely on the
+garage node and is unaffected. That is the half where failing badly would
+actually matter.
 
 ## Where things live
 
